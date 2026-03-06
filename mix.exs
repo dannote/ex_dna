@@ -1,28 +1,52 @@
 defmodule ExDNA.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @source_url "https://github.com/dannote/ex_dna"
+
   def project do
     [
       app: :ex_dna,
-      version: "0.1.0",
-      elixir: "~> 1.18",
+      version: @version,
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      name: "ExDNA",
+      description: "Code duplication detector powered by Elixir AST analysis",
+      source_url: @source_url,
+      docs: docs(),
+      package: package(),
+      aliases: aliases()
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
+  end
+
+  defp docs do
+    [
+      main: "ExDNA",
+      extras: ["README.md"]
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url}
+    ]
+  end
+
+  defp aliases do
+    []
   end
 end
