@@ -71,7 +71,7 @@ defmodule ExDNA.Config do
       {config, _binding} = Code.eval_file(path)
 
       unless is_map(config) do
-        Mix.raise("#{path} must return a map, got: #{inspect(config)}")
+        raise "#{path} must return a map, got: #{inspect(config)}"
       end
 
       config

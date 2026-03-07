@@ -37,7 +37,7 @@ defmodule ExDNA.AST.AntiUnifierTest do
 
       pattern_str = Macro.to_string(pattern)
       assert pattern_str =~ "Enum.map"
-      assert length(holes) > 0
+      assert holes != []
     end
 
     test "different literals become holes" do
@@ -80,7 +80,7 @@ defmodule ExDNA.AST.AntiUnifierTest do
       pattern_str = Macro.to_string(pattern)
       assert pattern_str =~ "Enum.map"
       assert pattern_str =~ "Enum.filter"
-      assert length(holes) > 0
+      assert holes != []
     end
 
     test "holes contain both original values" do

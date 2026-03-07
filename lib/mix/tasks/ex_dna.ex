@@ -41,6 +41,22 @@ defmodule Mix.Tasks.ExDna do
         aliases: [m: :min_mass, s: :min_similarity, i: :ignore, f: :format]
       )
 
+    config_opts = build_config(opts, paths)
+
+    start = System.monotonic_time(:millisecond)
+    report = ExDNA.analyze(config_opts)
+    elapsed = System.monotonic_time(:millisecond) - start
+
+    unless Keyword.get(opts, :format) == "json" do
+      IO.puts(["  Detection time:     #{elapsed}ms\n"])
+    end
+
+    if report.stats.total_clones > 0 do
+      System.at_exit(fn _ -> exit({:shutdown, 1}) end)
+    end
+  end
+
+  defp build_config(opts, paths) do
     reporters =
       case Keyword.get(opts, :format, "console") do
         "json" -> [ExDNA.Reporter.JSON]
@@ -53,35 +69,22 @@ defmodule Mix.Tasks.ExDna do
         _ -> :keep
       end
 
-    ignore = Keyword.get_values(opts, :ignore)
-
     excluded_macros =
       case Keyword.get_values(opts, :exclude_macro) do
         [] -> nil
         macros -> Enum.map(macros, &String.to_atom/1)
       end
 
-    config_opts =
-      [
-        paths: if(paths != [], do: paths, else: ["lib/"]),
-        reporters: reporters,
-        literal_mode: literal_mode,
-        normalize_pipes: Keyword.get(opts, :normalize_pipes, false),
-        ignore: ignore
-      ]
-      |> maybe_put(:min_mass, Keyword.get(opts, :min_mass))
-      |> maybe_put(:min_similarity, Keyword.get(opts, :min_similarity))
-      |> maybe_put(:excluded_macros, excluded_macros)
-
-    start = System.monotonic_time(:millisecond)
-    report = ExDNA.analyze(config_opts)
-    elapsed = System.monotonic_time(:millisecond) - start
-
-    IO.puts(["  Detection time:    #{elapsed}ms\n"])
-
-    if report.stats.total_clones > 0 do
-      System.at_exit(fn _ -> exit({:shutdown, 1}) end)
-    end
+    [
+      paths: if(paths != [], do: paths, else: ["lib/"]),
+      reporters: reporters,
+      literal_mode: literal_mode,
+      normalize_pipes: Keyword.get(opts, :normalize_pipes, false),
+      ignore: Keyword.get_values(opts, :ignore)
+    ]
+    |> maybe_put(:min_mass, Keyword.get(opts, :min_mass))
+    |> maybe_put(:min_similarity, Keyword.get(opts, :min_similarity))
+    |> maybe_put(:excluded_macros, excluded_macros)
   end
 
   defp maybe_put(opts, _key, nil), do: opts

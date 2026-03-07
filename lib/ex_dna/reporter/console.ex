@@ -1,25 +1,31 @@
 defmodule ExDNA.Reporter.Console do
   @moduledoc """
   Pretty-prints clone detection results to the terminal.
+
+  Inspired by Credo's output style — scannable by humans and parseable by LLMs.
   """
 
   alias ExDNA.Report
 
   @behaviour ExDNA.Reporter
 
+  @max_snippet_lines 8
+
   @impl true
   def report(%Report{clones: [], stats: stats}) do
     IO.puts([
       "\n",
       IO.ANSI.green(),
-      "✓ No code duplication detected",
+      "  ✓ No code duplication detected",
       IO.ANSI.reset(),
-      " (#{stats.files_analyzed} files analyzed)\n"
+      IO.ANSI.faint(),
+      " (#{stats.files_analyzed} files)\n",
+      IO.ANSI.reset()
     ])
   end
 
   def report(%Report{clones: clones, stats: stats}) do
-    IO.puts(["\n", IO.ANSI.yellow(), "ExDNA — Code Duplication Report", IO.ANSI.reset(), "\n"])
+    IO.puts(["\n", IO.ANSI.yellow(), "  ExDNA", IO.ANSI.reset(), " — code duplication report\n"])
 
     clones
     |> Enum.with_index(1)
@@ -29,128 +35,117 @@ defmodule ExDNA.Reporter.Console do
   end
 
   defp print_clone({clone, index}) do
-    type_label = format_type(clone.type)
-    mass_label = "#{clone.mass} nodes"
-
-    sim_label =
-      if clone.similarity do
-        ", #{Float.round(clone.similarity * 100, 1)}% similar"
-      else
-        ""
-      end
+    badge = type_badge(clone.type)
+    sim = format_similarity(clone.similarity)
 
     IO.puts([
-      IO.ANSI.cyan(),
-      "Clone ##{index}",
-      IO.ANSI.reset(),
-      " [#{type_label}, #{mass_label}#{sim_label}]\n"
+      "┃\n",
+      "┃ ",
+      badge,
+      " ##{index}",
+      IO.ANSI.faint(),
+      "  #{clone.mass} nodes#{sim}",
+      IO.ANSI.reset()
     ])
 
-    clone.fragments
-    |> Enum.zip(clone.source_snippets)
-    |> Enum.each(fn {frag, snippet} ->
-      IO.puts([
-        "  ",
-        IO.ANSI.faint(),
-        relative_path(frag.file),
-        ":#{frag.line}",
-        IO.ANSI.reset()
-      ])
+    Enum.each(clone.fragments, fn frag ->
+      location =
+        if frag.line > 0,
+          do: "#{relative_path(frag.file)}:#{frag.line}",
+          else: relative_path(frag.file)
 
-      snippet
-      |> String.split("\n")
-      |> Enum.take(10)
-      |> Enum.each(fn line ->
-        IO.puts(["    ", IO.ANSI.faint(), line, IO.ANSI.reset()])
-      end)
-
-      if length(String.split(snippet, "\n")) > 10 do
-        IO.puts(["    ", IO.ANSI.faint(), "...", IO.ANSI.reset()])
-      end
-
-      IO.puts("")
+      IO.puts(["┃   ", IO.ANSI.cyan(), location, IO.ANSI.reset()])
     end)
 
+    snippet = List.first(clone.source_snippets) || ""
+    lines = String.split(snippet, "\n")
+    show = Enum.take(lines, @max_snippet_lines)
+
+    IO.puts("┃")
+
+    Enum.each(show, fn line ->
+      IO.puts(["┃     ", IO.ANSI.faint(), line, IO.ANSI.reset()])
+    end)
+
+    if length(lines) > @max_snippet_lines do
+      IO.puts([
+        "┃     ",
+        IO.ANSI.faint(),
+        "… (+#{length(lines) - @max_snippet_lines} lines)",
+        IO.ANSI.reset()
+      ])
+    end
+
     print_suggestion(clone.suggestion)
+    IO.puts("┃")
   end
 
   defp print_suggestion(nil), do: :ok
 
   defp print_suggestion(%{kind: :extract_function} = suggestion) do
-    IO.puts([
-      "  ",
-      IO.ANSI.green(),
-      "💡 Suggestion: ",
-      IO.ANSI.reset(),
-      "extract function\n"
-    ])
-
     params = Enum.join(suggestion.params, ", ")
 
     IO.puts([
-      "  ",
+      "┃\n",
+      "┃   ",
       IO.ANSI.green(),
-      "  defp #{suggestion.name}(#{params}) do",
+      "→ Extract: ",
+      IO.ANSI.reset(),
+      IO.ANSI.green(),
+      "defp #{suggestion.name}(#{params})",
       IO.ANSI.reset()
     ])
 
-    suggestion.body
-    |> String.split("\n")
-    |> Enum.each(fn line ->
-      IO.puts(["  ", IO.ANSI.green(), "    #{line}", IO.ANSI.reset()])
-    end)
-
-    IO.puts(["  ", IO.ANSI.green(), "  end", IO.ANSI.reset()])
-
-    IO.puts("")
-
     Enum.each(suggestion.call_sites, fn site ->
       IO.puts([
-        "  ",
+        "┃     ",
         IO.ANSI.faint(),
-        "  #{relative_path(site.file)}:#{site.line} → #{site.call}",
+        relative_path(site.file),
+        ":#{site.line} → #{site.call}",
         IO.ANSI.reset()
       ])
     end)
-
-    IO.puts("")
   end
 
   defp print_summary(stats) do
-    IO.puts([
-      IO.ANSI.yellow(),
-      "─── Summary ",
-      String.duplicate("─", 50),
-      IO.ANSI.reset(),
-      "\n",
-      "  Files analyzed:    #{stats.files_analyzed}\n",
-      "  Clones found:      #{stats.total_clones}",
-      type_breakdown(stats),
-      "\n",
-      "  Duplicated lines:  ~#{stats.total_duplicated_lines}\n"
-    ])
-  end
+    type_iii = Map.get(stats, :type_iii_count, 0)
 
-  defp type_breakdown(stats) do
     parts =
       [
         if(stats.type_i_count > 0, do: "#{stats.type_i_count} exact"),
         if(stats.type_ii_count > 0, do: "#{stats.type_ii_count} renamed"),
-        if(Map.get(stats, :type_iii_count, 0) > 0,
-          do: "#{stats.type_iii_count} near-miss"
-        )
+        if(type_iii > 0, do: "#{type_iii} near-miss")
       ]
       |> Enum.reject(&is_nil/1)
 
-    case parts do
-      [] -> ""
-      _ -> " (#{Enum.join(parts, ", ")})"
-    end
+    breakdown = if parts != [], do: " (#{Enum.join(parts, ", ")})", else: ""
+
+    IO.puts([
+      "\n",
+      IO.ANSI.yellow(),
+      String.duplicate("─", 64),
+      IO.ANSI.reset(),
+      "\n",
+      "  Files analyzed:     #{stats.files_analyzed}\n",
+      "  Clones found:       ",
+      clone_color(stats.total_clones),
+      "#{stats.total_clones}",
+      IO.ANSI.reset(),
+      breakdown,
+      "\n",
+      "  Duplicated lines:   ~#{stats.total_duplicated_lines}\n"
+    ])
   end
 
-  defp format_type(:type_i), do: "exact"
-  defp format_type(:type_ii), do: "renamed"
-  defp format_type(:type_iii), do: "near-miss"
+  defp type_badge(:type_i), do: [IO.ANSI.red(), "[I]", IO.ANSI.reset(), " "]
+  defp type_badge(:type_ii), do: [IO.ANSI.yellow(), "[II]", IO.ANSI.reset()]
+  defp type_badge(:type_iii), do: [IO.ANSI.magenta(), "[≈]", IO.ANSI.reset(), " "]
+
+  defp format_similarity(nil), do: ""
+  defp format_similarity(sim), do: "  #{Float.round(sim * 100, 1)}%"
+
+  defp clone_color(0), do: IO.ANSI.green()
+  defp clone_color(_), do: IO.ANSI.red()
 
   defp relative_path(path) do
     case File.cwd() do

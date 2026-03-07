@@ -16,7 +16,8 @@ defmodule ExDNA.MixProject do
       source_url: @source_url,
       docs: docs(),
       package: package(),
-      aliases: aliases()
+      aliases: aliases(),
+      dialyzer: [plt_file: {:no_warn, "_build/dev/dialyxir_plt.plt"}]
     ]
   end
 
@@ -28,7 +29,10 @@ defmodule ExDNA.MixProject do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:jason, "~> 1.0"},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 

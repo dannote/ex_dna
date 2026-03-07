@@ -1,4 +1,6 @@
 defmodule ExDNA.AST.Normalizer do
+  alias ExDNA.AST.PipeNormalizer
+
   @moduledoc """
   Normalizes Elixir AST for structural comparison.
 
@@ -80,7 +82,7 @@ defmodule ExDNA.AST.Normalizer do
   defp rename_var(node, env), do: {node, env}
 
   defp maybe_normalize_pipes(ast, false), do: ast
-  defp maybe_normalize_pipes(ast, true), do: ExDNA.AST.PipeNormalizer.normalize(ast)
+  defp maybe_normalize_pipes(ast, true), do: PipeNormalizer.normalize(ast)
 
   defp maybe_abstract_literals(ast, :keep), do: ast
   defp maybe_abstract_literals(ast, :abstract), do: abstract_walk(ast)

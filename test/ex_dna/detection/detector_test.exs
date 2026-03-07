@@ -46,7 +46,7 @@ defmodule ExDNA.Detection.DetectorTest do
       config = Config.new(paths: [dir], min_mass: 5, reporters: [])
       clones = Detector.run(config)
 
-      assert length(clones) > 0
+      assert clones != []
 
       clone = List.first(clones)
       files = Enum.map(clone.fragments, & &1.file) |> Enum.sort()
@@ -81,7 +81,7 @@ defmodule ExDNA.Detection.DetectorTest do
       config = Config.new(paths: [dir], min_mass: 5, reporters: [])
       clones = Detector.run(config)
 
-      assert length(clones) > 0
+      assert clones != []
     end
 
     test "returns empty list for unique code", %{dir: dir} do
@@ -156,7 +156,7 @@ defmodule ExDNA.Detection.DetectorTest do
       config = Config.new(paths: [dir], min_mass: 5, reporters: [])
       clones = Detector.run(config)
 
-      assert length(clones) > 0
+      assert clones != []
     end
 
     test "detects pipe vs nested call when normalize_pipes is enabled", %{dir: dir} do
@@ -238,7 +238,7 @@ defmodule ExDNA.Detection.DetectorTest do
           Enum.any?(c.fragments, fn f -> match?({:field, _, _}, f.ast) end)
         end)
 
-      assert length(schema_clones) > 0
+      assert schema_clones != []
       assert field_clones_with == []
     end
 
@@ -294,7 +294,7 @@ defmodule ExDNA.Detection.DetectorTest do
       exact_only = Enum.filter(exact_clones, &(&1.type == :type_i))
 
       assert length(fuzzy_clones) >= length(exact_only)
-      assert length(type_iii) > 0
+      assert type_iii != []
     end
   end
 end

@@ -47,13 +47,11 @@ defmodule ExDNA.Detection.Filter do
     large_start = larger_frag.line
     small_start = smaller_frag.line
 
-    cond do
-      large_start == 0 or small_start == 0 ->
-        true
-
-      true ->
-        small_start >= large_start and
-          small_start + small_span <= large_start + large_span
+    if large_start == 0 or small_start == 0 do
+      true
+    else
+      small_start >= large_start and
+        small_start + small_span <= large_start + large_span
     end
   end
 

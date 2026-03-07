@@ -1,7 +1,7 @@
 defmodule ExDNA.AST.EditDistanceTest do
   use ExUnit.Case, async: true
 
-  alias ExDNA.AST.EditDistance
+  alias ExDNA.AST.{EditDistance, Fingerprint, Normalizer}
 
   describe "similarity/2" do
     test "identical ASTs have similarity 1.0" do
@@ -53,8 +53,8 @@ defmodule ExDNA.AST.EditDistanceTest do
       ast_a = quote do: foo(a, b, c)
       ast_b = quote do: foo(x, y, z)
 
-      norm_a = ExDNA.AST.Normalizer.normalize(ast_a)
-      norm_b = ExDNA.AST.Normalizer.normalize(ast_b)
+      norm_a = Normalizer.normalize(ast_a)
+      norm_b = Normalizer.normalize(ast_b)
 
       assert EditDistance.similarity(norm_a, norm_b) == 1.0
     end
@@ -82,7 +82,7 @@ defmodule ExDNA.AST.EditDistanceTest do
   describe "matching_nodes/2" do
     test "counts all nodes for identical trees" do
       ast = quote do: foo(1, 2)
-      mass = ExDNA.AST.Fingerprint.mass(ast)
+      mass = Fingerprint.mass(ast)
 
       assert EditDistance.matching_nodes(ast, ast) == mass
     end

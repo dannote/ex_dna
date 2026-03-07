@@ -55,22 +55,7 @@ defmodule ExDNA.Detection.Detector do
       (type_i_clones ++ type_ii_clones)
       |> Filter.prune_nested()
 
-    type_iii_clones =
-      if config.min_similarity < 1.0 do
-        exact_hashes =
-          exact_clones
-          |> Enum.flat_map(fn c -> Enum.map(c.fragments, &{&1.file, &1.line}) end)
-          |> MapSet.new()
-
-        all_exact_hashes = MapSet.new(exact_clones, & &1.hash)
-
-        Fuzzy.detect(fragments, config.min_similarity, all_exact_hashes)
-        |> Enum.reject(fn clone ->
-          Enum.any?(clone.fragments, fn f -> MapSet.member?(exact_hashes, {f.file, f.line}) end)
-        end)
-      else
-        []
-      end
+    type_iii_clones = find_fuzzy_clones(fragments, exact_clones, config)
 
     (exact_clones ++ type_iii_clones)
     |> Enum.map(&attach_suggestion/1)
@@ -143,6 +128,23 @@ defmodule ExDNA.Detection.Detector do
       {:error, _} ->
         []
     end
+  end
+
+  defp find_fuzzy_clones(_fragments, _exact_clones, %Config{min_similarity: s}) when s >= 1.0,
+    do: []
+
+  defp find_fuzzy_clones(fragments, exact_clones, config) do
+    exact_locations =
+      exact_clones
+      |> Enum.flat_map(fn c -> Enum.map(c.fragments, &{&1.file, &1.line}) end)
+      |> MapSet.new()
+
+    exact_hashes = MapSet.new(exact_clones, & &1.hash)
+
+    Fuzzy.detect(fragments, config.min_similarity, exact_hashes)
+    |> Enum.reject(fn clone ->
+      Enum.any?(clone.fragments, fn f -> MapSet.member?(exact_locations, {f.file, f.line}) end)
+    end)
   end
 
   defp find_clones(fragments, type) do

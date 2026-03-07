@@ -41,7 +41,7 @@ defmodule ExDNA.Detection.FuzzyTest do
 
       clones = Fuzzy.detect([frag_a, frag_b], 0.7, MapSet.new())
 
-      assert length(clones) > 0
+      assert clones != []
       [clone] = clones
       assert clone.type == :type_iii
       assert clone.similarity >= 0.7

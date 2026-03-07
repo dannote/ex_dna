@@ -66,7 +66,7 @@ defmodule ExDNA.Refactor.SuggestionTest do
       suggestion = Suggestion.suggest(clone)
 
       assert %Suggestion{kind: :extract_function} = suggestion
-      assert length(suggestion.params) > 0
+      assert suggestion.params != []
       assert suggestion.body =~ "Enum.map"
     end
 

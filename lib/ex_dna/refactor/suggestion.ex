@@ -56,12 +56,10 @@ defmodule ExDNA.Refactor.Suggestion do
       |> Enum.with_index()
       |> Enum.map(fn {frag, idx} ->
         args =
-          holes
-          |> Enum.map(fn hole ->
+          Enum.map_join(holes, ", ", fn hole ->
             value = Enum.at(hole.values, min(idx, 1))
             value |> humanize_ast() |> Macro.to_string()
           end)
-          |> Enum.join(", ")
 
         call =
           if args == "" do
