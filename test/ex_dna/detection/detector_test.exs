@@ -261,6 +261,50 @@ defmodule ExDNA.Detection.DetectorTest do
       assert is_list(clones)
     end
 
+    test "skips @no_clone annotated defs from detection", %{dir: dir} do
+      write_fixture(dir, "clone_a.ex", """
+      defmodule CloneA do
+        def process(data) do
+          data
+          |> Enum.map(fn x -> x * 2 end)
+          |> Enum.filter(fn x -> x > 10 end)
+          |> Enum.sort()
+          |> Enum.take(5)
+        end
+      end
+      """)
+
+      write_fixture(dir, "clone_b.ex", """
+      defmodule CloneB do
+        @no_clone true
+        def process(data) do
+          data
+          |> Enum.map(fn x -> x * 2 end)
+          |> Enum.filter(fn x -> x > 10 end)
+          |> Enum.sort()
+          |> Enum.take(5)
+        end
+      end
+      """)
+
+      config = Config.new(paths: [dir], min_mass: 5, reporters: [])
+      clones = Detector.run(config)
+
+      # The annotated def in CloneB should not produce fragments,
+      # so no clone pair at the `def process` level should be found.
+      process_clones =
+        Enum.filter(clones, fn c ->
+          Enum.any?(c.fragments, fn f ->
+            case f.ast do
+              {:def, _, [{:process, _, _} | _]} -> true
+              _ -> false
+            end
+          end)
+        end)
+
+      assert process_clones == []
+    end
+
     test "detects near-miss clones with min_similarity < 1.0", %{dir: dir} do
       write_fixture(dir, "near_a.ex", """
       defmodule NearA do

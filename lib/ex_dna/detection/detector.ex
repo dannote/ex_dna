@@ -9,10 +9,10 @@ defmodule ExDNA.Detection.Detector do
   5. Filter out nested/overlapping clones.
   """
 
-  alias ExDNA.AST.Fingerprint
+  alias ExDNA.AST.{Annotator, Fingerprint}
   alias ExDNA.Config
   alias ExDNA.Detection.{Clone, Filter, Fuzzy}
-  alias ExDNA.Refactor.Suggestion
+  alias ExDNA.Refactor.{BehaviourSuggestion, Suggestion}
 
   @doc """
   Run detection for the given config. Returns a list of `Clone` structs.
@@ -59,6 +59,7 @@ defmodule ExDNA.Detection.Detector do
 
     (exact_clones ++ type_iii_clones)
     |> Enum.map(&attach_suggestion/1)
+    |> BehaviourSuggestion.analyze()
     |> Enum.sort_by(& &1.mass, :desc)
   end
 
@@ -115,6 +116,8 @@ defmodule ExDNA.Detection.Detector do
 
         case Task.yield(task, config.parse_timeout) || Task.shutdown(task) do
           {:ok, {:ok, ast}} ->
+            ast = Annotator.strip_no_clone(ast)
+
             Fingerprint.fragments(ast, file, config.min_mass,
               literal_mode: config.literal_mode,
               normalize_pipes: config.normalize_pipes,

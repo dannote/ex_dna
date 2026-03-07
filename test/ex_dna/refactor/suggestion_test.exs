@@ -113,5 +113,414 @@ defmodule ExDNA.Refactor.SuggestionTest do
       suggestion = Suggestion.suggest(clone)
       assert suggestion.name == "shared_process"
     end
+
+    test "names extracted function based on original defp" do
+      ast =
+        quote do
+          defp transform(data) do
+            Enum.map(data, &to_string/1)
+          end
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 15,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 15},
+          %{file: "b.ex", line: 1, ast: ast, mass: 15}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "shared_transform"
+    end
+  end
+
+  describe "generate_name - struct literals" do
+    test "names from struct without id field" do
+      ast = quote(do: %Step{action: :run, timeout: 5000})
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "build_step"
+    end
+
+    test "names from struct with atom id field" do
+      ast = quote(do: %Step{id: :contact_step, action: :run})
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "contact_step_step"
+    end
+
+    test "names from struct with string id field" do
+      ast = quote(do: %Config{id: "main_config", value: 42})
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "main_config_config"
+    end
+
+    test "names from struct with non-literal id falls back to build_" do
+      ast = quote(do: %Step{id: some_var, action: :run})
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "build_step"
+    end
+  end
+
+  describe "generate_name - case/if/cond" do
+    test "case with module function call subject" do
+      ast =
+        quote do
+          case Foo.bar(x) do
+            :ok -> 1
+            :error -> 2
+          end
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 15,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 15},
+          %{file: "b.ex", line: 1, ast: ast, mass: 15}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "handle_bar"
+    end
+
+    test "case with local function call subject" do
+      ast =
+        quote do
+          case validate(input) do
+            {:ok, result} -> result
+            {:error, reason} -> raise reason
+          end
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 15,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 15},
+          %{file: "b.ex", line: 1, ast: ast, mass: 15}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "handle_validate"
+    end
+
+    test "case with variable subject" do
+      ast =
+        quote do
+          case status do
+            :active -> true
+            :inactive -> false
+          end
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "handle_status"
+    end
+
+    test "if expression derives name from subject" do
+      ast =
+        quote do
+          if valid?(data) do
+            :ok
+          else
+            :error
+          end
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "handle_valid?"
+    end
+
+    test "cond expression gets generic name" do
+      ast =
+        quote do
+          cond do
+            x > 0 -> :positive
+            x < 0 -> :negative
+            true -> :zero
+          end
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 12,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 12},
+          %{file: "b.ex", line: 1, ast: ast, mass: 12}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "handle_condition"
+    end
+  end
+
+  describe "generate_name - pipe chains" do
+    test "pipe chain uses last two function names" do
+      ast =
+        quote do
+          data
+          |> Enum.map(fn x -> x * 2 end)
+          |> Enum.sort()
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 15,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 15},
+          %{file: "b.ex", line: 1, ast: ast, mass: 15}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "map_and_sort"
+    end
+
+    test "pipe chain with single function" do
+      ast =
+        quote do
+          data |> Enum.sort()
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "sort"
+    end
+
+    test "pipe chain with three+ functions uses last two" do
+      ast =
+        quote do
+          data
+          |> Enum.map(&to_string/1)
+          |> Enum.filter(&(&1 != ""))
+          |> Enum.sort()
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 20,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 20},
+          %{file: "b.ex", line: 1, ast: ast, mass: 20}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "filter_and_sort"
+    end
+  end
+
+  describe "generate_name - known patterns" do
+    test "Ecto.Changeset call produces build_changeset" do
+      ast =
+        quote do
+          Ecto.Changeset.cast(struct, params, [:name, :email])
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 12,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 12},
+          %{file: "b.ex", line: 1, ast: ast, mass: 12}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "build_changeset"
+    end
+
+    test "Ecto.Query call produces build_query" do
+      ast =
+        quote do
+          Ecto.Query.from(u in User, where: u.active == true)
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 15,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 15},
+          %{file: "b.ex", line: 1, ast: ast, mass: 15}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "build_query"
+    end
+  end
+
+  describe "generate_name - fallback" do
+    test "unknown AST shape falls back to duplicated_block" do
+      ast = quote(do: 1 + 2 + 3)
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "duplicated_block"
+    end
+  end
+
+  describe "humanize_ast - variable names" do
+    test "preserves original variable names in body" do
+      ast =
+        quote do
+          Enum.map(users, fn user -> user.name end)
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 12,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast, mass: 12},
+          %{file: "b.ex", line: 1, ast: ast, mass: 12}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.body =~ "users"
+      assert suggestion.body =~ "user"
+    end
+
+    test "hole parameters become argN in body" do
+      ast_a = quote(do: String.duplicate("hello", 3))
+      ast_b = quote(do: String.duplicate("world", 5))
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 10,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast_a, mass: 10},
+          %{file: "b.ex", line: 1, ast: ast_b, mass: 10}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.body =~ "arg0"
+      assert suggestion.body =~ "arg1"
+      assert suggestion.params == [:arg0, :arg1]
+    end
+
+    test "call sites use original variable names" do
+      ast_a =
+        quote do
+          Enum.map(users, fn x -> x * 2 end)
+        end
+
+      ast_b =
+        quote do
+          Enum.map(items, fn y -> y * 3 end)
+        end
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 15,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: ast_a, mass: 15},
+          %{file: "b.ex", line: 1, ast: ast_b, mass: 15}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      [site_a, site_b] = suggestion.call_sites
+      assert site_a.call =~ "users"
+      assert site_b.call =~ "items"
+    end
   end
 end

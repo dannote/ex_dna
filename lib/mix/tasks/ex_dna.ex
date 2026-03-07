@@ -18,7 +18,7 @@ defmodule Mix.Tasks.ExDna do
     * `--exclude-macro` — macro name to skip during analysis (repeatable).
       `@` is excluded by default. Common: `schema`, `pipe_through`, `plug`
     * `--ignore` — glob pattern to exclude (repeatable)
-    * `--format` — output format: `console` (default) or `json`
+    * `--format` — output format: `console` (default), `json`, or `html`
 
   Exits with code 1 if clones are found.
   """
@@ -60,6 +60,7 @@ defmodule Mix.Tasks.ExDna do
     reporters =
       case Keyword.get(opts, :format, "console") do
         "json" -> [ExDNA.Reporter.JSON]
+        "html" -> [ExDNA.Reporter.HTML]
         _ -> [ExDNA.Reporter.Console]
       end
 

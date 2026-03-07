@@ -5,6 +5,7 @@ defmodule ExDNA.Reporter.Console do
   Inspired by Credo's output style — scannable by humans and parseable by LLMs.
   """
 
+  alias ExDNA.Detection.Grouper
   alias ExDNA.Report
 
   @behaviour ExDNA.Reporter
@@ -28,10 +29,35 @@ defmodule ExDNA.Reporter.Console do
     IO.puts(["\n", IO.ANSI.yellow(), "  ExDNA", IO.ANSI.reset(), " — code duplication report\n"])
 
     clones
-    |> Enum.with_index(1)
-    |> Enum.each(&print_clone/1)
+    |> Grouper.group()
+    |> Map.fetch!(:ordered)
+    |> Enum.each(fn
+      {:group, group} ->
+        print_group_header(group)
+        Enum.each(group.clones, &print_clone({&1.clone, &1.index}))
+
+      {:clone, entry} ->
+        print_clone({entry.clone, entry.index})
+    end)
 
     print_summary(stats)
+  end
+
+  defp print_group_header(group) do
+    dirs = Enum.join(group.directories, " ↔ ")
+    count = length(group.clones)
+    mass = group.total_mass
+
+    IO.puts([
+      "┃\n",
+      "┃ ",
+      IO.ANSI.yellow(),
+      "── #{dirs}",
+      IO.ANSI.reset(),
+      IO.ANSI.faint(),
+      " (#{count} clones, #{mass} nodes)",
+      IO.ANSI.reset()
+    ])
   end
 
   defp print_clone({clone, index}) do
@@ -77,10 +103,29 @@ defmodule ExDNA.Reporter.Console do
     end
 
     print_suggestion(clone.suggestion)
+    print_behaviour_suggestion(clone.behaviour_suggestion)
     IO.puts("┃")
   end
 
   defp print_suggestion(nil), do: :ok
+
+  defp print_suggestion(%{kind: :extract_macro} = suggestion) do
+    params = if suggestion.params == [], do: "", else: Enum.join(suggestion.params, ", ")
+
+    IO.puts([
+      "┃\n",
+      "┃   ",
+      IO.ANSI.green(),
+      "→ Consider: ",
+      IO.ANSI.reset(),
+      IO.ANSI.green(),
+      "defmacro #{suggestion.name}(#{params})",
+      IO.ANSI.reset(),
+      IO.ANSI.faint(),
+      " — #{suggestion.occurrence_count} occurrences across modules",
+      IO.ANSI.reset()
+    ])
+  end
 
   defp print_suggestion(%{kind: :extract_function} = suggestion) do
     params = Enum.join(suggestion.params, ", ")
@@ -105,6 +150,27 @@ defmodule ExDNA.Reporter.Console do
         IO.ANSI.reset()
       ])
     end)
+  end
+
+  defp print_behaviour_suggestion(nil), do: :ok
+
+  defp print_behaviour_suggestion(%{callback_name: name, callback_arity: arity, modules: modules}) do
+    args = List.duplicate("term()", arity) |> Enum.join(", ")
+    module_list = Enum.join(modules, ", ")
+
+    IO.puts([
+      "┃\n",
+      "┃   ",
+      IO.ANSI.blue(),
+      "→ Consider: ",
+      IO.ANSI.reset(),
+      IO.ANSI.blue(),
+      "@callback #{name}(#{args})",
+      IO.ANSI.reset(),
+      IO.ANSI.faint(),
+      " — implemented identically in #{module_list}",
+      IO.ANSI.reset()
+    ])
   end
 
   defp print_summary(stats) do

@@ -116,29 +116,51 @@ function with the differences as parameters:
 Use `mix ex_dna.explain N` to deep-dive into a specific clone with the full
 anti-unification breakdown.
 
+## Suppressing clones
+
+Add `@no_clone true` before a function to exclude it from detection:
+
+```elixir
+@no_clone true
+def validate(params) do
+  # This won't be flagged as a duplicate
+end
+```
+
+## Incremental detection
+
+Add ExDNA as a compiler for automatic detection on every `mix compile`:
+
+```elixir
+def project do
+  [compilers: Mix.compilers() ++ [:ex_dna]]
+end
+```
+
+Results are cached in `.ex_dna_cache` — only changed files are re-analyzed.
+
 ## Roadmap
 
 - [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
 - [x] Phase 2: Anti-unification + refactoring suggestions
 - [x] Phase 3: Type-III fuzzy matching + pipe normalization
 - [x] Hardening: parallel parsing, `.ex_dna.exs` config, excluded macros, parse timeout
-- [x] Output: Credo-style console reporter, proper JSON reporter
+- [x] Output: Credo-style console reporter, JSON reporter, HTML reporter
 - [x] Validation: 0 false positives across real-world projects (100–400 files each)
+- [x] Smart suggestion names — derived from AST (struct names, call patterns,
+  pipe chains) instead of generic `extracted_function`
+- [x] Cross-file clone grouping — clones sharing the same directories are
+  grouped with a header: `actions/ ↔ tools/ (6 clones, 298 nodes)`
+- [x] Macro suggestion engine — detects repeated boilerplate (3+ fragments,
+  module-level, struct literals) and suggests `defmacro`
+- [x] Behaviour extraction — when multiple modules implement the same `def`
+  with identical structure, suggests `@callback`
+- [x] `Mix.Task.Compiler` — incremental detection via mtime-based cache,
+  only re-analyzes changed files
+- [x] `@no_clone` annotation — add `@no_clone true` before a `def` to
+  suppress it from detection
 - [ ] LSP server via GenLSP — push clone diagnostics to editors alongside
-  [Expert](https://expert-lsp.org/) (Elixir's official LSP). Editors like
-  Neovim/VS Code run both servers per filetype.
-- [ ] Smarter suggestion names — derive from the AST (dominant call site,
-  shared struct name) instead of generic `extracted_function`
-- [ ] Cross-file clone grouping — "actions/* and tools/* share 5 duplicated
-  functions" instead of listing each pair separately
-- [ ] Macro suggestion engine — detect repeated boilerplate (e.g., identical
-  `schema` blocks across modules) and suggest `defmacro`
-- [ ] Behaviour extraction — when multiple modules implement the same function
-  shape, suggest `@callback` / behaviour
-- [ ] `Mix.Task.Compiler` tracer — incremental detection, only re-analyze
-  changed files
-- [ ] `@no_clone` annotation — suppress known/intentional duplicates
-- [ ] HTML reporter with syntax-highlighted diffs
+  [Expert](https://expert-lsp.org/) (Elixir's official LSP)
 
 ## License
 

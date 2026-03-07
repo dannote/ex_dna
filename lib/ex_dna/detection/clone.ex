@@ -19,10 +19,20 @@ defmodule ExDNA.Detection.Clone do
           fragments: [fragment_location()],
           source_snippets: [String.t()],
           suggestion: map() | nil,
+          behaviour_suggestion: map() | nil,
           similarity: float() | nil
         }
 
-  defstruct [:type, :hash, :mass, :suggestion, :similarity, fragments: [], source_snippets: []]
+  defstruct [
+    :type,
+    :hash,
+    :mass,
+    :suggestion,
+    :behaviour_suggestion,
+    :similarity,
+    fragments: [],
+    source_snippets: []
+  ]
 
   @doc """
   Build a clone from a group of matching fragments.
