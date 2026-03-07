@@ -17,10 +17,11 @@ defmodule ExDNA.Detection.Clone do
           hash: binary(),
           mass: pos_integer(),
           fragments: [fragment_location()],
-          source_snippets: [String.t()]
+          source_snippets: [String.t()],
+          suggestion: map() | nil
         }
 
-  defstruct [:type, :hash, :mass, fragments: [], source_snippets: []]
+  defstruct [:type, :hash, :mass, :suggestion, fragments: [], source_snippets: []]
 
   @doc """
   Build a clone from a group of matching fragments.

@@ -70,10 +70,48 @@ All options can be passed to `mix ex_dna` or to `ExDNA.analyze/1`:
 | `literal_mode` | `--literal-mode` | `keep` | `keep` = Type-I only, `abstract` = also Type-II |
 | `ignore` | `--ignore` | `[]` | Glob patterns to exclude |
 
+## Refactoring suggestions
+
+ExDNA doesn't just find clones — it tells you how to fix them. Using
+*anti-unification* (computing the most specific generalization of two ASTs),
+it identifies what's common and what differs, then suggests an extracted
+function with the differences as parameters:
+
+```
+Clone #3 [exact, 19 nodes]
+
+  admin_service.ex:7
+    params
+    |> Map.put(:inserted_at, DateTime.utc_now())
+    |> validate_required([:name, :email])
+    |> validate_format(:email, ~r/@/)
+
+  user_service.ex:7
+    attrs
+    |> Map.put(:inserted_at, DateTime.utc_now())
+    |> validate_required([:name, :email])
+    |> validate_format(:email, ~r/@/)
+
+  💡 Suggestion: extract function
+
+    defp extracted_function(arg0) do
+      arg0
+      |> Map.put(:inserted_at, DateTime.utc_now())
+      |> validate_required([:name, :email])
+      |> validate_format(:email, ~r/@/)
+    end
+
+    admin_service.ex:7 → extracted_function(params)
+    user_service.ex:7  → extracted_function(attrs)
+```
+
+Use `mix ex_dna.explain N` to deep-dive into a specific clone with the full
+anti-unification breakdown.
+
 ## Roadmap
 
 - [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
-- [ ] Phase 2: Anti-unification + refactoring suggestions
+- [x] Phase 2: Anti-unification + refactoring suggestions
 - [ ] Phase 3: Type-III fuzzy matching + pipe/guard normalization
 - [ ] Phase 4: Macro suggestion engine + behaviour extraction
 - [ ] Phase 5: Compiler tracer integration + HTML reporter

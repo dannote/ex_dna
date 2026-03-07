@@ -63,6 +63,50 @@ defmodule ExDNA.Reporter.Console do
 
       IO.puts("")
     end)
+
+    print_suggestion(clone.suggestion)
+  end
+
+  defp print_suggestion(nil), do: :ok
+
+  defp print_suggestion(%{kind: :extract_function} = suggestion) do
+    IO.puts([
+      "  ",
+      IO.ANSI.green(),
+      "💡 Suggestion: ",
+      IO.ANSI.reset(),
+      "extract function\n"
+    ])
+
+    params = Enum.join(suggestion.params, ", ")
+
+    IO.puts([
+      "  ",
+      IO.ANSI.green(),
+      "  defp #{suggestion.name}(#{params}) do",
+      IO.ANSI.reset()
+    ])
+
+    suggestion.body
+    |> String.split("\n")
+    |> Enum.each(fn line ->
+      IO.puts(["  ", IO.ANSI.green(), "    #{line}", IO.ANSI.reset()])
+    end)
+
+    IO.puts(["  ", IO.ANSI.green(), "  end", IO.ANSI.reset()])
+
+    IO.puts("")
+
+    Enum.each(suggestion.call_sites, fn site ->
+      IO.puts([
+        "  ",
+        IO.ANSI.faint(),
+        "  #{relative_path(site.file)}:#{site.line} → #{site.call}",
+        IO.ANSI.reset()
+      ])
+    end)
+
+    IO.puts("")
   end
 
   defp print_summary(stats) do

@@ -12,6 +12,7 @@ defmodule ExDNA.Detection.Detector do
   alias ExDNA.AST.Fingerprint
   alias ExDNA.Config
   alias ExDNA.Detection.{Clone, Filter}
+  alias ExDNA.Refactor.Suggestion
 
   @doc """
   Run detection for the given config. Returns a list of `Clone` structs.
@@ -42,6 +43,7 @@ defmodule ExDNA.Detection.Detector do
 
     (type_i_clones ++ type_ii_clones)
     |> Filter.prune_nested()
+    |> Enum.map(&attach_suggestion/1)
     |> Enum.sort_by(& &1.mass, :desc)
   end
 
@@ -109,6 +111,13 @@ defmodule ExDNA.Detection.Detector do
     |> Enum.group_by(& &1.hash)
     |> Enum.filter(fn {_hash, group} -> length(group) >= 2 end)
     |> Enum.map(fn {_hash, group} -> Clone.from_fragments(group, type) end)
+  end
+
+  defp attach_suggestion(clone) do
+    case Suggestion.suggest(clone) do
+      nil -> clone
+      suggestion -> %{clone | suggestion: suggestion}
+    end
   end
 
   defp reject_already_found(type_ii, type_i) do
