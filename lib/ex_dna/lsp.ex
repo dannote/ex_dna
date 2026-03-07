@@ -68,7 +68,7 @@ defmodule ExDNA.LSP do
            change: TextDocumentSyncKind.full()
          }
        },
-       server_info: %{name: "ExDNA", version: "0.1.0"}
+       server_info: %{name: "ExDNA", version: "1.0.0"}
      }, assign(lsp, root_uri: root_uri)}
   end
 

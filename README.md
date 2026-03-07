@@ -1,72 +1,76 @@
 # ExDNA 🧬
 
-Code duplication detector powered by Elixir AST analysis.
+Code duplication detector for Elixir, inspired by
+[jscpd](https://github.com/kucherenko/jscpd) but built on Elixir's native AST
+instead of token matching.
 
-Unlike token-based tools (jscpd, etc.), ExDNA works directly with Elixir's
-native AST. It normalizes variable names, strips metadata, and fingerprints
-subtrees — so `fn(a, b) -> a + b end` and `fn(x, y) -> x + y end` are
-recognized as the same code.
+Because ExDNA understands code structure — not just text —
+`fn(a, b) -> a + b end` and `fn(x, y) -> x + y end` are recognized as the
+same code. It also tells you *how* to fix each clone: extract a function, a
+macro, or a behaviour callback.
+
+## Features
+
+- **Three clone types** — exact copies (I), renamed variables / changed
+  literals (II), and near-miss clones via tree edit distance (III)
+- **Refactoring suggestions** — extract function, extract macro, extract
+  behaviour with `@callback`
+- **Smart naming** — suggestions are named after the dominant struct, call,
+  or pattern (`build_changeset`, `contact_step`) instead of
+  `extracted_function`
+- **Pipe normalization** — `x |> f()` and `f(x)` match as the same code
+- **Cross-file grouping** — `actions/ ↔ tools/ (6 clones, 298 nodes)`
+  instead of listing each pair
+- **`@no_clone` annotation** — suppress known/intentional duplicates
+- **Incremental `Mix.Task.Compiler`** — only re-analyzes changed files
+- **LSP server** — pushes clone diagnostics to your editor alongside
+  [Expert](https://github.com/elixir-lang/expert) or ElixirLS
+- **CI-ready** — exits with code 1 when clones are found
+- **Three output formats** — Credo-style console, JSON, self-contained HTML
+- **Fast** — parallel file parsing, 395 files in ~1 second
 
 ## Installation
 
-Add `ex_dna` to your `mix.exs`:
-
 ```elixir
 def deps do
-  [{:ex_dna, "~> 0.1.0", only: [:dev, :test], runtime: false}]
+  [{:ex_dna, "~> 1.0", only: [:dev, :test], runtime: false}]
 end
 ```
 
 ## Usage
 
 ```bash
-# Scan your project
-$ mix ex_dna
-
-# Scan specific paths
-$ mix ex_dna lib/my_app/accounts lib/my_app/admin
-
-# Detect renamed-variable clones (Type-II)
-$ mix ex_dna --literal-mode abstract
-
-# Lower the sensitivity (fewer, larger clones)
-$ mix ex_dna --min-mass 50
-
-# JSON output
-$ mix ex_dna --format json
+mix ex_dna                              # scan lib/
+mix ex_dna lib/accounts lib/admin       # specific paths
+mix ex_dna --literal-mode abstract      # enable Type-II (renamed vars)
+mix ex_dna --min-similarity 0.85        # enable Type-III (near-miss)
+mix ex_dna --min-mass 50                # fewer, larger clones
+mix ex_dna --format json                # machine-readable
+mix ex_dna --format html                # browsable report
 ```
+
+Deep-dive into a specific clone:
+
+```bash
+mix ex_dna.explain 3
+```
+
+Shows the full anti-unification breakdown — common structure, divergence
+points, and the suggested extraction with call sites.
 
 ### Programmatic API
 
 ```elixir
 report = ExDNA.analyze("lib/")
-report.clones       # list of %ExDNA.Detection.Clone{}
-report.stats        # %{files_analyzed: 42, total_clones: 3, ...}
+report.clones   #=> [%ExDNA.Detection.Clone{}, ...]
+report.stats    #=> %{files_analyzed: 42, total_clones: 3, ...}
 ```
-
-## Clone types
-
-| Type | What it catches |
-|------|----------------|
-| **Type I** | Exact copies (modulo whitespace and comments) |
-| **Type II** | Same structure with renamed variables and/or different literals |
-| **Type III** | Near-miss clones — same structure ± a few changed/added/removed lines |
-
-## How it works
-
-1. Parse `.ex`/`.exs` files into Elixir AST via `Code.string_to_quoted/2`
-2. Normalize: strip metadata → flatten pipes (optional) → rename variables → optionally abstract literals
-3. Walk every subtree above a mass threshold and compute a BLAKE2b fingerprint
-4. Group matching fingerprints — any group of 2+ is a clone (Type I/II)
-5. For Type-III: compare non-matching fragments within ±30% mass using tree edit distance
-6. Prune nested clones (keep the largest match per location)
-7. Generate refactoring suggestions via anti-unification
 
 ## Configuration
 
-Options are applied in layers: **defaults → `.ex_dna.exs` → CLI flags/API opts**.
+Options are layered: **defaults → `.ex_dna.exs` → CLI flags**.
 
-Create `.ex_dna.exs` in your project root for project-level defaults:
+Create `.ex_dna.exs` in your project root:
 
 ```elixir
 %{
@@ -77,59 +81,28 @@ Create `.ex_dna.exs` in your project root for project-level defaults:
 }
 ```
 
-All options can also be passed to `mix ex_dna` or to `ExDNA.analyze/1`:
-
 | Option | CLI flag | Default | Description |
 |--------|----------|---------|-------------|
-| `min_mass` | `--min-mass` | 30 | Minimum AST node count for a fragment |
-| `min_similarity` | `--min-similarity` | 1.0 | Similarity threshold. Values < 1.0 enable Type-III near-miss detection |
+| `min_mass` | `--min-mass` | `30` | Minimum AST nodes for a fragment |
+| `min_similarity` | `--min-similarity` | `1.0` | Threshold for Type-III (set < 1.0 to enable) |
 | `literal_mode` | `--literal-mode` | `keep` | `keep` = Type-I only, `abstract` = also Type-II |
-| `normalize_pipes` | `--normalize-pipes` | `false` | Treat `x \|> f()` the same as `f(x)` |
-| `excluded_macros` | `--exclude-macro` | `[:@]` | Macro names to skip (module attrs excluded by default) |
-| `parse_timeout` | — | `5000` | Max ms per file for parsing (kills hung files) |
+| `normalize_pipes` | `--normalize-pipes` | `false` | Treat `x \|> f()` same as `f(x)` |
+| `excluded_macros` | `--exclude-macro` | `[:@]` | Macro calls to skip entirely |
+| `parse_timeout` | — | `5000` | Max ms per file (kills hung parses) |
 | `ignore` | `--ignore` | `[]` | Glob patterns to exclude |
 
-## Refactoring suggestions
-
-ExDNA doesn't just find clones — it tells you how to fix them. Using
-*anti-unification* (computing the most specific generalization of two ASTs),
-it identifies what's common and what differs, then suggests an extracted
-function with the differences as parameters:
-
-```
-┃
-┃ [I]  #3  19 nodes
-┃   admin_service.ex:7
-┃   user_service.ex:7
-┃
-┃     params
-┃     |> Map.put(:inserted_at, DateTime.utc_now())
-┃     |> validate_required([:name, :email])
-┃     |> validate_format(:email, ~r/@/)
-┃
-┃   → Extract: defp extracted_function(arg0)
-┃     admin_service.ex:7 → extracted_function(params)
-┃     user_service.ex:7  → extracted_function(attrs)
-┃
-```
-
-Use `mix ex_dna.explain N` to deep-dive into a specific clone with the full
-anti-unification breakdown.
-
 ## Suppressing clones
-
-Add `@no_clone true` before a function to exclude it from detection:
 
 ```elixir
 @no_clone true
 def validate(params) do
-  # This won't be flagged as a duplicate
+  # intentional duplication, won't be flagged
 end
 ```
 
 ## Incremental detection
 
-Add ExDNA as a compiler for automatic detection on every `mix compile`:
+Add ExDNA as a compiler for automatic detection on `mix compile`:
 
 ```elixir
 def project do
@@ -137,15 +110,16 @@ def project do
 end
 ```
 
-Results are cached in `.ex_dna_cache` — only changed files are re-analyzed.
+Only changed files are re-analyzed. Cache is stored in `.ex_dna_cache` (add to
+`.gitignore`).
 
-## Editor integration (LSP)
+## Editor integration
 
-ExDNA ships an LSP server that pushes clone diagnostics to your editor.
-It runs alongside your primary Elixir LSP (Expert, ElixirLS).
+ExDNA ships an LSP server that pushes warnings inline on every save. It runs
+alongside your primary Elixir LSP.
 
 ```bash
-$ mix ex_dna.lsp
+mix ex_dna.lsp
 ```
 
 ### Neovim
@@ -158,31 +132,21 @@ vim.lsp.config('ex_dna', {
 })
 ```
 
-Re-analyzes on every file save and pushes warnings inline.
+## How it works
 
-## Roadmap
-
-- [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
-- [x] Phase 2: Anti-unification + refactoring suggestions
-- [x] Phase 3: Type-III fuzzy matching + pipe normalization
-- [x] Hardening: parallel parsing, `.ex_dna.exs` config, excluded macros, parse timeout
-- [x] Output: Credo-style console reporter, JSON reporter, HTML reporter
-- [x] Validation: 0 false positives across real-world projects (100–400 files each)
-- [x] Smart suggestion names — derived from AST (struct names, call patterns,
-  pipe chains) instead of generic `extracted_function`
-- [x] Cross-file clone grouping — clones sharing the same directories are
-  grouped with a header: `actions/ ↔ tools/ (6 clones, 298 nodes)`
-- [x] Macro suggestion engine — detects repeated boilerplate (3+ fragments,
-  module-level, struct literals) and suggests `defmacro`
-- [x] Behaviour extraction — when multiple modules implement the same `def`
-  with identical structure, suggests `@callback`
-- [x] `Mix.Task.Compiler` — incremental detection via mtime-based cache,
-  only re-analyzes changed files
-- [x] `@no_clone` annotation — add `@no_clone true` before a `def` to
-  suppress it from detection
-- [x] LSP server via GenLSP — push clone diagnostics to editors alongside
-  [Expert](https://expert-lsp.org/) (Elixir's official LSP)
+1. **Parse** — `Code.string_to_quoted/2` on every `.ex`/`.exs` file (parallel,
+   with per-file timeout)
+2. **Normalize** — strip line/column metadata → rename variables to positional
+   placeholders (`$0`, `$1`) → optionally abstract literals → optionally
+   flatten pipes
+3. **Fingerprint** — walk every subtree above `min_mass` nodes, hash with
+   BLAKE2b
+4. **Detect** — group by hash (Type I/II), compare nearby fragments by tree
+   edit distance (Type III)
+5. **Filter** — prune nested clones, keep the largest match per location
+6. **Suggest** — anti-unify each clone pair to compute the common structure,
+   generate extract-function/macro/behaviour suggestions
 
 ## License
 
-MIT
+[MIT](LICENSE)

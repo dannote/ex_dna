@@ -1,21 +1,23 @@
 defmodule ExDNA do
   @moduledoc """
-  Code duplication detector powered by Elixir AST analysis.
+  Code duplication detector for Elixir, powered by native AST analysis.
 
-  ExDNA finds duplicated code blocks by normalizing the AST (stripping variable
-  names, metadata, and literals), fingerprinting subtrees, and grouping
-  collisions. Unlike token-based detectors, it understands Elixir's structure:
-  pipes, pattern matching, guards, and module boundaries.
+  ExDNA understands code structure, not just text. It normalizes variable names,
+  abstracts literals, and compares AST subtrees — so renamed copies and
+  near-miss clones are caught too. Each clone comes with a concrete refactoring
+  suggestion.
 
   ## Quick start
 
-      ExDNA.analyze("lib/")
-      #=> %ExDNA.Report{clones: [...], stats: %{...}}
+      report = ExDNA.analyze("lib/")
+      report.clones   #=> [%ExDNA.Detection.Clone{}, ...]
+      report.stats    #=> %{files_analyzed: 42, total_clones: 3, ...}
 
   ## Clone types
 
   - **Type I** — exact copies (modulo whitespace/comments)
   - **Type II** — renamed variables and/or changed literals
+  - **Type III** — near-miss clones (similar structure ± edits)
 
   ## Configuration
 
@@ -23,10 +25,12 @@ defmodule ExDNA do
 
       %{
         min_mass: 30,
-        min_similarity: 1.0,
+        min_similarity: 0.85,
         paths: ["lib/"],
         ignore: ["lib/my_app_web/templates/**"]
       }
+
+  See the README for the full option reference.
   """
 
   alias ExDNA.{Config, Detection, Report}

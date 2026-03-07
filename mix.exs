@@ -1,7 +1,7 @@
 defmodule ExDNA.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "1.0.0"
   @source_url "https://github.com/dannote/ex_dna"
 
   def project do
@@ -39,15 +39,16 @@ defmodule ExDNA.MixProject do
 
   defp docs do
     [
-      main: "ExDNA",
-      extras: ["README.md"]
+      main: "readme",
+      extras: ["README.md", "LICENSE"]
     ]
   end
 
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url},
+      files: ~w(lib mix.exs README.md LICENSE .formatter.exs)
     ]
   end
 
