@@ -6,12 +6,15 @@ defmodule Mix.Tasks.ExDna do
       $ mix ex_dna
       $ mix ex_dna lib/my_app/accounts
       $ mix ex_dna --min-mass 20 --literal-mode abstract
+      $ mix ex_dna --min-similarity 0.85
 
   ## Command-line options
 
     * `--min-mass` — minimum AST node count (default: 30)
-    * `--min-similarity` — similarity threshold 0.0–1.0 (default: 1.0)
+    * `--min-similarity` — similarity threshold 0.0–1.0 (default: 1.0).
+      Values below 1.0 enable Type-III near-miss detection.
     * `--literal-mode` — `keep` (Type-I only) or `abstract` (also Type-II). Default: `keep`
+    * `--normalize-pipes` — treat `x |> f()` the same as `f(x)`. Default: false
     * `--ignore` — glob pattern to exclude (repeatable)
     * `--format` — output format: `console` (default) or `json`
 
@@ -28,6 +31,7 @@ defmodule Mix.Tasks.ExDna do
           min_mass: :integer,
           min_similarity: :float,
           literal_mode: :string,
+          normalize_pipes: :boolean,
           ignore: :keep,
           format: :string
         ],
@@ -55,6 +59,7 @@ defmodule Mix.Tasks.ExDna do
         paths: if(paths != [], do: paths, else: ["lib/"]),
         reporters: reporters,
         literal_mode: literal_mode,
+        normalize_pipes: Keyword.get(opts, :normalize_pipes, false),
         ignore: ignore
       ]
       |> maybe_put(:min_mass, Keyword.get(opts, :min_mass))

@@ -158,5 +158,75 @@ defmodule ExDNA.Detection.DetectorTest do
 
       assert length(clones) > 0
     end
+
+    test "detects pipe vs nested call when normalize_pipes is enabled", %{dir: dir} do
+      write_fixture(dir, "piped.ex", """
+      defmodule Piped do
+        def process(data) do
+          data
+          |> Enum.map(fn x -> x * 2 end)
+          |> Enum.filter(fn x -> x > 10 end)
+          |> Enum.sort()
+          |> Enum.take(5)
+        end
+      end
+      """)
+
+      write_fixture(dir, "nested.ex", """
+      defmodule Nested do
+        def process(data) do
+          Enum.take(Enum.sort(Enum.filter(Enum.map(data, fn x -> x * 2 end), fn x -> x > 10 end)), 5)
+        end
+      end
+      """)
+
+      config_without =
+        Config.new(paths: [dir], min_mass: 5, reporters: [], normalize_pipes: false)
+
+      clones_without = Detector.run(config_without)
+      pipe_body_clones = Enum.filter(clones_without, fn c -> c.mass >= 15 end)
+
+      config_with = Config.new(paths: [dir], min_mass: 5, reporters: [], normalize_pipes: true)
+      clones_with = Detector.run(config_with)
+      pipe_body_clones_with = Enum.filter(clones_with, fn c -> c.mass >= 15 end)
+
+      assert length(pipe_body_clones_with) > length(pipe_body_clones)
+    end
+
+    test "detects near-miss clones with min_similarity < 1.0", %{dir: dir} do
+      write_fixture(dir, "near_a.ex", """
+      defmodule NearA do
+        def process(data) do
+          data
+          |> Enum.map(fn x -> x * 2 end)
+          |> Enum.filter(fn x -> x > 10 end)
+          |> Enum.sort()
+        end
+      end
+      """)
+
+      write_fixture(dir, "near_b.ex", """
+      defmodule NearB do
+        def process(data) do
+          data
+          |> Enum.map(fn x -> x * 2 end)
+          |> Enum.filter(fn x -> x > 10 end)
+          |> Enum.take(5)
+        end
+      end
+      """)
+
+      config_exact = Config.new(paths: [dir], min_mass: 5, reporters: [])
+      exact_clones = Detector.run(config_exact)
+
+      config_fuzzy = Config.new(paths: [dir], min_mass: 5, min_similarity: 0.7, reporters: [])
+      fuzzy_clones = Detector.run(config_fuzzy)
+
+      type_iii = Enum.filter(fuzzy_clones, &(&1.type == :type_iii))
+      exact_only = Enum.filter(exact_clones, &(&1.type == :type_i))
+
+      assert length(fuzzy_clones) >= length(exact_only)
+      assert length(type_iii) > 0
+    end
   end
 end

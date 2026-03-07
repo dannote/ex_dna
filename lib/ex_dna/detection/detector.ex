@@ -11,7 +11,7 @@ defmodule ExDNA.Detection.Detector do
 
   alias ExDNA.AST.Fingerprint
   alias ExDNA.Config
-  alias ExDNA.Detection.{Clone, Filter}
+  alias ExDNA.Detection.{Clone, Filter, Fuzzy}
   alias ExDNA.Refactor.Suggestion
 
   @doc """
@@ -41,8 +41,28 @@ defmodule ExDNA.Detection.Detector do
         []
       end
 
-    (type_i_clones ++ type_ii_clones)
-    |> Filter.prune_nested()
+    exact_clones =
+      (type_i_clones ++ type_ii_clones)
+      |> Filter.prune_nested()
+
+    type_iii_clones =
+      if config.min_similarity < 1.0 do
+        exact_hashes =
+          exact_clones
+          |> Enum.flat_map(fn c -> Enum.map(c.fragments, &{&1.file, &1.line}) end)
+          |> MapSet.new()
+
+        all_exact_hashes = MapSet.new(exact_clones, & &1.hash)
+
+        Fuzzy.detect(fragments, config.min_similarity, all_exact_hashes)
+        |> Enum.reject(fn clone ->
+          Enum.any?(clone.fragments, fn f -> MapSet.member?(exact_hashes, {f.file, f.line}) end)
+        end)
+      else
+        []
+      end
+
+    (exact_clones ++ type_iii_clones)
     |> Enum.map(&attach_suggestion/1)
     |> Enum.sort_by(& &1.mass, :desc)
   end
@@ -95,7 +115,10 @@ defmodule ExDNA.Detection.Detector do
       {:ok, source} ->
         case Code.string_to_quoted(source, line: 1, columns: true, file: file) do
           {:ok, ast} ->
-            Fingerprint.fragments(ast, file, config.min_mass, literal_mode: config.literal_mode)
+            Fingerprint.fragments(ast, file, config.min_mass,
+              literal_mode: config.literal_mode,
+              normalize_pipes: config.normalize_pipes
+            )
 
           {:error, _} ->
             []

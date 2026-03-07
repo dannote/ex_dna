@@ -50,14 +50,17 @@ report.stats        # %{files_analyzed: 42, total_clones: 3, ...}
 |------|----------------|
 | **Type I** | Exact copies (modulo whitespace and comments) |
 | **Type II** | Same structure with renamed variables and/or different literals |
+| **Type III** | Near-miss clones — same structure ± a few changed/added/removed lines |
 
 ## How it works
 
 1. Parse `.ex`/`.exs` files into Elixir AST via `Code.string_to_quoted/2`
-2. Normalize: strip metadata → rename variables to positional placeholders → optionally abstract literals
+2. Normalize: strip metadata → flatten pipes (optional) → rename variables → optionally abstract literals
 3. Walk every subtree above a mass threshold and compute a BLAKE2b fingerprint
-4. Group matching fingerprints — any group of 2+ is a clone
-5. Prune nested clones (keep the largest match per location)
+4. Group matching fingerprints — any group of 2+ is a clone (Type I/II)
+5. For Type-III: compare non-matching fragments within ±30% mass using tree edit distance
+6. Prune nested clones (keep the largest match per location)
+7. Generate refactoring suggestions via anti-unification
 
 ## Configuration
 
@@ -66,8 +69,9 @@ All options can be passed to `mix ex_dna` or to `ExDNA.analyze/1`:
 | Option | CLI flag | Default | Description |
 |--------|----------|---------|-------------|
 | `min_mass` | `--min-mass` | 30 | Minimum AST node count for a fragment |
-| `min_similarity` | `--min-similarity` | 1.0 | Similarity threshold (future: fuzzy matching) |
+| `min_similarity` | `--min-similarity` | 1.0 | Similarity threshold. Values < 1.0 enable Type-III near-miss detection |
 | `literal_mode` | `--literal-mode` | `keep` | `keep` = Type-I only, `abstract` = also Type-II |
+| `normalize_pipes` | `--normalize-pipes` | `false` | Treat `x \|> f()` the same as `f(x)` |
 | `ignore` | `--ignore` | `[]` | Glob patterns to exclude |
 
 ## Refactoring suggestions
@@ -112,7 +116,7 @@ anti-unification breakdown.
 
 - [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
 - [x] Phase 2: Anti-unification + refactoring suggestions
-- [ ] Phase 3: Type-III fuzzy matching + pipe/guard normalization
+- [x] Phase 3: Type-III fuzzy matching + pipe normalization
 - [ ] Phase 4: Macro suggestion engine + behaviour extraction
 - [ ] Phase 5: Compiler tracer integration + HTML reporter
 

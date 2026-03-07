@@ -7,7 +7,8 @@ defmodule ExDNA.Config do
     min_similarity: 1.0,
     ignore: [],
     reporters: [ExDNA.Reporter.Console],
-    literal_mode: :keep
+    literal_mode: :keep,
+    normalize_pipes: false
   }
 
   defstruct Map.keys(@defaults)
@@ -19,7 +20,8 @@ defmodule ExDNA.Config do
           min_similarity: float(),
           ignore: [String.t()],
           reporters: [module()],
-          literal_mode: literal_mode()
+          literal_mode: literal_mode(),
+          normalize_pipes: boolean()
         }
 
   @spec new(keyword()) :: t()

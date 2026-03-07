@@ -32,11 +32,18 @@ defmodule ExDNA.Reporter.Console do
     type_label = format_type(clone.type)
     mass_label = "#{clone.mass} nodes"
 
+    sim_label =
+      if clone.similarity do
+        ", #{Float.round(clone.similarity * 100, 1)}% similar"
+      else
+        ""
+      end
+
     IO.puts([
       IO.ANSI.cyan(),
       "Clone ##{index}",
       IO.ANSI.reset(),
-      " [#{type_label}, #{mass_label}]\n"
+      " [#{type_label}, #{mass_label}#{sim_label}]\n"
     ])
 
     clone.fragments
@@ -124,11 +131,14 @@ defmodule ExDNA.Reporter.Console do
     ])
   end
 
-  defp type_breakdown(%{type_i_count: i, type_ii_count: ii}) do
+  defp type_breakdown(stats) do
     parts =
       [
-        if(i > 0, do: "#{i} exact"),
-        if(ii > 0, do: "#{ii} renamed")
+        if(stats.type_i_count > 0, do: "#{stats.type_i_count} exact"),
+        if(stats.type_ii_count > 0, do: "#{stats.type_ii_count} renamed"),
+        if(Map.get(stats, :type_iii_count, 0) > 0,
+          do: "#{stats.type_iii_count} near-miss"
+        )
       ]
       |> Enum.reject(&is_nil/1)
 
@@ -140,6 +150,7 @@ defmodule ExDNA.Reporter.Console do
 
   defp format_type(:type_i), do: "exact"
   defp format_type(:type_ii), do: "renamed"
+  defp format_type(:type_iii), do: "near-miss"
 
   defp relative_path(path) do
     case File.cwd() do

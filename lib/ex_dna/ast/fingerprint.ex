@@ -25,19 +25,21 @@ defmodule ExDNA.AST.Fingerprint do
   """
   @spec fragments(Macro.t(), String.t(), pos_integer(), keyword()) :: [fragment()]
   def fragments(ast, file, min_mass, opts \\ []) do
-    literal_mode = Keyword.get(opts, :literal_mode, :keep)
-    {_ast, frags} = walk(ast, file, min_mass, literal_mode, [])
+    norm_opts = Keyword.take(opts, [:literal_mode, :normalize_pipes])
+    {_ast, frags} = walk(ast, file, min_mass, norm_opts, [])
     frags
   end
 
-  defp walk({_form, meta, args} = node, file, min_mass, lit_mode, acc) when is_list(args) do
+  defp walk({_form, meta, args} = node, file, min_mass, norm_opts, acc) when is_list(args) do
     acc =
-      Enum.reduce(args, acc, fn child, a -> elem(walk(child, file, min_mass, lit_mode, a), 1) end)
+      Enum.reduce(args, acc, fn child, a ->
+        elem(walk(child, file, min_mass, norm_opts, a), 1)
+      end)
 
     mass = mass(node)
 
     if mass >= min_mass do
-      normalized = Normalizer.normalize(node, literal_mode: lit_mode)
+      normalized = Normalizer.normalize(node, norm_opts)
       hash = compute_hash(normalized)
       line = Keyword.get(meta, :line, 0)
 
@@ -55,20 +57,22 @@ defmodule ExDNA.AST.Fingerprint do
     end
   end
 
-  defp walk({left, right}, file, min_mass, lit_mode, acc) do
-    {_, acc} = walk(left, file, min_mass, lit_mode, acc)
-    {_, acc} = walk(right, file, min_mass, lit_mode, acc)
+  defp walk({left, right}, file, min_mass, norm_opts, acc) do
+    {_, acc} = walk(left, file, min_mass, norm_opts, acc)
+    {_, acc} = walk(right, file, min_mass, norm_opts, acc)
     {{left, right}, acc}
   end
 
-  defp walk(list, file, min_mass, lit_mode, acc) when is_list(list) do
+  defp walk(list, file, min_mass, norm_opts, acc) when is_list(list) do
     acc =
-      Enum.reduce(list, acc, fn item, a -> elem(walk(item, file, min_mass, lit_mode, a), 1) end)
+      Enum.reduce(list, acc, fn item, a ->
+        elem(walk(item, file, min_mass, norm_opts, a), 1)
+      end)
 
     {list, acc}
   end
 
-  defp walk(leaf, _file, _min_mass, _lit_mode, acc), do: {leaf, acc}
+  defp walk(leaf, _file, _min_mass, _norm_opts, acc), do: {leaf, acc}
 
   @doc """
   Count the number of AST nodes in a tree (its "mass").

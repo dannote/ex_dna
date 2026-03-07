@@ -15,7 +15,7 @@ defmodule ExDNA.AST.Normalizer do
      type-tagged placeholders to detect Type-II clones.
   """
 
-  @type option :: {:literal_mode, :keep | :abstract}
+  @type option :: {:literal_mode, :keep | :abstract} | {:normalize_pipes, boolean()}
 
   @doc """
   Normalize an AST fragment.
@@ -25,13 +25,17 @@ defmodule ExDNA.AST.Normalizer do
     * `:literal_mode` — `:keep` preserves literal values (Type-I detection),
       `:abstract` replaces them with placeholders (Type-II detection).
       Defaults to `:keep`.
+    * `:normalize_pipes` — when `true`, convert pipe chains to nested calls
+      so `x |> f()` matches `f(x)`. Defaults to `false`.
   """
   @spec normalize(Macro.t(), [option()]) :: Macro.t()
   def normalize(ast, opts \\ []) do
     literal_mode = Keyword.get(opts, :literal_mode, :keep)
+    normalize_pipes = Keyword.get(opts, :normalize_pipes, false)
 
     ast
     |> strip_metadata()
+    |> maybe_normalize_pipes(normalize_pipes)
     |> normalize_variables()
     |> maybe_abstract_literals(literal_mode)
   end
@@ -74,6 +78,9 @@ defmodule ExDNA.AST.Normalizer do
   end
 
   defp rename_var(node, env), do: {node, env}
+
+  defp maybe_normalize_pipes(ast, false), do: ast
+  defp maybe_normalize_pipes(ast, true), do: ExDNA.AST.PipeNormalizer.normalize(ast)
 
   defp maybe_abstract_literals(ast, :keep), do: ast
   defp maybe_abstract_literals(ast, :abstract), do: abstract_walk(ast)

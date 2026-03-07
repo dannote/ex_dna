@@ -12,6 +12,7 @@ defmodule ExDNA.Report do
           total_duplicated_lines: non_neg_integer(),
           type_i_count: non_neg_integer(),
           type_ii_count: non_neg_integer(),
+          type_iii_count: non_neg_integer(),
           detection_time_ms: non_neg_integer()
         }
 
@@ -60,6 +61,7 @@ defmodule ExDNA.Report do
       total_duplicated_lines: duplicated_lines,
       type_i_count: Enum.count(clones, &(&1.type == :type_i)),
       type_ii_count: Enum.count(clones, &(&1.type == :type_ii)),
+      type_iii_count: Enum.count(clones, &(&1.type == :type_iii)),
       detection_time_ms: 0
     }
   end
