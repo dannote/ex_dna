@@ -187,7 +187,6 @@ defmodule ExDNA.Refactor.Suggestion do
 
   # --- Helpers for generate_name ---
 
-  # Extract a meaningful name from a case/if subject
   defp subject_name({{:., _, [{:__aliases__, _, _parts}, func_name]}, _, _})
        when is_atom(func_name) do
     Atom.to_string(func_name)
