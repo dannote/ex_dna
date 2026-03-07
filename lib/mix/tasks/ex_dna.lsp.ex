@@ -1,33 +1,39 @@
-defmodule Mix.Tasks.ExDna.Lsp do
-  @shortdoc "Start the ExDNA LSP server"
-  @moduledoc """
-  Starts the ExDNA Language Server Protocol server over stdio.
+if Code.ensure_loaded?(GenLSP) do
+  defmodule Mix.Tasks.ExDna.Lsp do
+    @shortdoc "Start the ExDNA LSP server"
+    @moduledoc """
+    Starts the ExDNA Language Server Protocol server over stdio.
 
-      $ mix ex_dna.lsp
+        $ mix ex_dna.lsp
 
-  Configure your editor to run this command as an LSP server.
-  It pushes code clone diagnostics alongside your primary Elixir
-  LSP (e.g., Expert, ElixirLS).
+    Configure your editor to run this command as an LSP server.
+    It pushes code clone diagnostics alongside your primary Elixir
+    LSP (e.g., Expert, ElixirLS).
 
-  ## Neovim (nvim-lspconfig)
+    Requires the optional `gen_lsp` dependency:
 
-      vim.lsp.config('ex_dna', {
-        cmd = { 'mix', 'ex_dna.lsp' },
-        root_markers = { 'mix.exs' },
-        filetypes = { 'elixir' },
-      })
+        {:gen_lsp, "~> 0.11"}
 
-  ## VS Code (settings.json)
+    ## Neovim (nvim-lspconfig)
 
-  Use a generic LSP extension and point it at `mix ex_dna.lsp`.
-  """
+        vim.lsp.config('ex_dna', {
+          cmd = { 'mix', 'ex_dna.lsp' },
+          root_markers = { 'mix.exs' },
+          filetypes = { 'elixir' },
+        })
 
-  use Mix.Task
+    ## VS Code (settings.json)
 
-  @impl Mix.Task
-  def run(_argv) do
-    ExDNA.LSP.Supervisor.start_link([])
+    Use a generic LSP extension and point it at `mix ex_dna.lsp`.
+    """
 
-    Process.sleep(:infinity)
+    use Mix.Task
+
+    @impl Mix.Task
+    def run(_argv) do
+      ExDNA.LSP.Supervisor.start_link([])
+
+      Process.sleep(:infinity)
+    end
   end
 end
