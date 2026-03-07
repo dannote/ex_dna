@@ -15,6 +15,8 @@ defmodule Mix.Tasks.ExDna do
       Values below 1.0 enable Type-III near-miss detection.
     * `--literal-mode` — `keep` (Type-I only) or `abstract` (also Type-II). Default: `keep`
     * `--normalize-pipes` — treat `x |> f()` the same as `f(x)`. Default: false
+    * `--exclude-macro` — macro name to skip during analysis (repeatable).
+      `@` is excluded by default. Common: `schema`, `pipe_through`, `plug`
     * `--ignore` — glob pattern to exclude (repeatable)
     * `--format` — output format: `console` (default) or `json`
 
@@ -32,6 +34,7 @@ defmodule Mix.Tasks.ExDna do
           min_similarity: :float,
           literal_mode: :string,
           normalize_pipes: :boolean,
+          exclude_macro: :keep,
           ignore: :keep,
           format: :string
         ],
@@ -50,9 +53,13 @@ defmodule Mix.Tasks.ExDna do
         _ -> :keep
       end
 
-    ignore =
-      opts
-      |> Keyword.get_values(:ignore)
+    ignore = Keyword.get_values(opts, :ignore)
+
+    excluded_macros =
+      case Keyword.get_values(opts, :exclude_macro) do
+        [] -> nil
+        macros -> Enum.map(macros, &String.to_atom/1)
+      end
 
     config_opts =
       [
@@ -64,6 +71,7 @@ defmodule Mix.Tasks.ExDna do
       ]
       |> maybe_put(:min_mass, Keyword.get(opts, :min_mass))
       |> maybe_put(:min_similarity, Keyword.get(opts, :min_similarity))
+      |> maybe_put(:excluded_macros, excluded_macros)
 
     start = System.monotonic_time(:millisecond)
     report = ExDNA.analyze(config_opts)

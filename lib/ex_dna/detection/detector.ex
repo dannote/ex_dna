@@ -23,17 +23,27 @@ defmodule ExDNA.Detection.Detector do
 
     fragments =
       files
-      |> Enum.flat_map(fn file -> parse_and_fingerprint(file, config) end)
+      |> Task.async_stream(
+        fn file -> parse_and_fingerprint(file, config) end,
+        max_concurrency: System.schedulers_online(),
+        ordered: false
+      )
+      |> Enum.flat_map(fn {:ok, frags} -> frags end)
 
     type_i_clones = find_clones(fragments, :type_i)
 
     type_ii_clones =
       if config.min_similarity < 1.0 or config.literal_mode == :abstract do
+        abstract_config = %{config | literal_mode: :abstract}
+
         fragments_ii =
           files
-          |> Enum.flat_map(fn file ->
-            parse_and_fingerprint(file, %{config | literal_mode: :abstract})
-          end)
+          |> Task.async_stream(
+            fn file -> parse_and_fingerprint(file, abstract_config) end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false
+          )
+          |> Enum.flat_map(fn {:ok, frags} -> frags end)
 
         find_clones(fragments_ii, :type_ii)
         |> reject_already_found(type_i_clones)
@@ -113,14 +123,20 @@ defmodule ExDNA.Detection.Detector do
   defp parse_and_fingerprint(file, config) do
     case File.read(file) do
       {:ok, source} ->
-        case Code.string_to_quoted(source, line: 1, columns: true, file: file) do
-          {:ok, ast} ->
+        task =
+          Task.async(fn ->
+            Code.string_to_quoted(source, line: 1, columns: true, file: file)
+          end)
+
+        case Task.yield(task, config.parse_timeout) || Task.shutdown(task) do
+          {:ok, {:ok, ast}} ->
             Fingerprint.fragments(ast, file, config.min_mass,
               literal_mode: config.literal_mode,
-              normalize_pipes: config.normalize_pipes
+              normalize_pipes: config.normalize_pipes,
+              excluded_macros: config.excluded_macros
             )
 
-          {:error, _} ->
+          _ ->
             []
         end
 

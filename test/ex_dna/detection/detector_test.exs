@@ -193,6 +193,74 @@ defmodule ExDNA.Detection.DetectorTest do
       assert length(pipe_body_clones_with) > length(pipe_body_clones)
     end
 
+    test "excludes specified macros from detection", %{dir: dir} do
+      write_fixture(dir, "schema_a.ex", """
+      defmodule SchemaA do
+        use Ecto.Schema
+
+        schema "users" do
+          field :name, :string
+          field :email, :string
+          field :age, :integer
+        end
+      end
+      """)
+
+      write_fixture(dir, "schema_b.ex", """
+      defmodule SchemaB do
+        use Ecto.Schema
+
+        schema "admins" do
+          field :name, :string
+          field :email, :string
+          field :age, :integer
+        end
+      end
+      """)
+
+      config_without =
+        Config.new(paths: [dir], min_mass: 3, reporters: [], excluded_macros: [])
+
+      clones_without = Detector.run(config_without)
+
+      schema_clones =
+        Enum.filter(clones_without, fn c ->
+          Enum.any?(c.source_snippets, &String.contains?(&1, "field"))
+        end)
+
+      config_with =
+        Config.new(paths: [dir], min_mass: 3, reporters: [], excluded_macros: [:schema, :field])
+
+      clones_with = Detector.run(config_with)
+
+      field_clones_with =
+        Enum.filter(clones_with, fn c ->
+          Enum.any?(c.fragments, fn f -> match?({:field, _, _}, f.ast) end)
+        end)
+
+      assert length(schema_clones) > 0
+      assert field_clones_with == []
+    end
+
+    test "handles parse errors gracefully", %{dir: dir} do
+      write_fixture(dir, "broken.ex", """
+      defmodule Broken do
+        def foo(
+      end
+      """)
+
+      write_fixture(dir, "good.ex", """
+      defmodule Good do
+        def process(data), do: data
+      end
+      """)
+
+      config = Config.new(paths: [dir], min_mass: 5, reporters: [])
+      clones = Detector.run(config)
+
+      assert is_list(clones)
+    end
+
     test "detects near-miss clones with min_similarity < 1.0", %{dir: dir} do
       write_fixture(dir, "near_a.ex", """
       defmodule NearA do

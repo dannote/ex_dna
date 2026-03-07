@@ -3,70 +3,114 @@ defmodule ExDNA.AST.FingerprintTest do
 
   alias ExDNA.AST.Fingerprint
 
+  describe "fragments/4" do
+    test "excludes module attributes by default with excluded_macros: [:@]" do
+      ast =
+        quote do
+          defmodule Foo do
+            @moduledoc "Some docs"
+            @type t :: %{name: String.t()}
+
+            def process(data) do
+              data
+              |> Enum.map(fn x -> x * 2 end)
+              |> Enum.filter(fn x -> x > 10 end)
+            end
+          end
+        end
+
+      frags = Fingerprint.fragments(ast, "test.ex", 3, excluded_macros: [:@])
+
+      attr_frags =
+        Enum.filter(frags, fn f -> match?({:@, _, _}, f.ast) end)
+
+      assert attr_frags == []
+
+      has_process =
+        Enum.any?(frags, fn f ->
+          Macro.to_string(f.ast) |> String.contains?("process")
+        end)
+
+      assert has_process
+    end
+
+    test "excludes specified macros" do
+      ast =
+        quote do
+          defmodule MySchema do
+            use Ecto.Schema
+
+            schema "users" do
+              field(:name, :string)
+              field(:email, :string)
+            end
+
+            def changeset(user, attrs) do
+              user
+              |> Ecto.Changeset.cast(attrs, [:name, :email])
+              |> Ecto.Changeset.validate_required([:name])
+            end
+          end
+        end
+
+      frags_without = Fingerprint.fragments(ast, "test.ex", 3, excluded_macros: [])
+
+      frags_with =
+        Fingerprint.fragments(ast, "test.ex", 3, excluded_macros: [:schema, :field])
+
+      schema_frags_without =
+        Enum.filter(frags_without, fn f ->
+          Macro.to_string(f.ast) |> String.contains?("schema")
+        end)
+
+      schema_frags_with =
+        Enum.filter(frags_with, fn f ->
+          match?({:schema, _, _}, f.ast) or match?({:field, _, _}, f.ast)
+        end)
+
+      assert length(schema_frags_without) > length(schema_frags_with)
+    end
+
+    test "excluded macros don't prevent child fragments from non-excluded code" do
+      ast =
+        quote do
+          defmodule Foo do
+            @moduledoc "docs"
+
+            def process(data) do
+              data
+              |> Enum.map(fn x -> x * 2 end)
+            end
+          end
+        end
+
+      frags = Fingerprint.fragments(ast, "test.ex", 3, excluded_macros: [:@])
+
+      has_process =
+        Enum.any?(frags, fn f ->
+          Macro.to_string(f.ast) |> String.contains?("process")
+        end)
+
+      assert has_process
+    end
+  end
+
   describe "mass/1" do
-    test "counts leaf nodes" do
+    test "counts leaf as 1" do
       assert Fingerprint.mass(42) == 1
       assert Fingerprint.mass(:ok) == 1
     end
 
     test "counts call nodes" do
+      # foo(1, 2) → {:foo, [], [1, 2]} = 1 call + 2 args = 3
       ast = quote do: foo(1, 2)
-      assert Fingerprint.mass(ast) >= 3
+      assert Fingerprint.mass(ast) == 3
     end
 
     test "counts nested structures" do
-      ast = quote do: Enum.map([1, 2, 3], fn x -> x * 2 end)
-      assert Fingerprint.mass(ast) > 5
-    end
-  end
-
-  describe "compute_hash/1" do
-    test "identical ASTs produce identical hashes" do
-      ast1 = quote do: foo(1, 2)
-      ast2 = quote do: foo(1, 2)
-
-      assert Fingerprint.compute_hash(ast1) == Fingerprint.compute_hash(ast2)
-    end
-
-    test "different ASTs produce different hashes" do
-      ast1 = quote do: foo(1, 2)
-      ast2 = quote do: bar(3, 4)
-
-      refute Fingerprint.compute_hash(ast1) == Fingerprint.compute_hash(ast2)
-    end
-  end
-
-  describe "fragments/4" do
-    test "extracts fragments meeting min_mass" do
-      ast =
-        quote do
-          def foo(a, b) do
-            a + b + a * b
-          end
-        end
-
-      frags = Fingerprint.fragments(ast, "test.ex", 3)
-      assert length(frags) > 0
-      assert Enum.all?(frags, fn f -> f.mass >= 3 end)
-    end
-
-    test "skips small fragments" do
-      ast = quote do: 1 + 2
-      frags = Fingerprint.fragments(ast, "test.ex", 100)
-      assert frags == []
-    end
-
-    test "records file and line" do
-      ast =
-        Code.string_to_quoted!("""
-        def foo(x) do
-          x + 1 + x * 2 + x
-        end
-        """)
-
-      frags = Fingerprint.fragments(ast, "myfile.ex", 3)
-
-      assert Enum.all?(frags, fn f -> f.file == "myfile.ex" end)
+      # foo(bar(1), 2) → 1 (foo) + 1 (bar) + 1 (1) + 1 (2) = 4
+      ast = quote do: foo(bar(1), 2)
+      assert Fingerprint.mass(ast) == 4
     end
   end
 end

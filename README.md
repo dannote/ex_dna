@@ -64,7 +64,20 @@ report.stats        # %{files_analyzed: 42, total_clones: 3, ...}
 
 ## Configuration
 
-All options can be passed to `mix ex_dna` or to `ExDNA.analyze/1`:
+Options are applied in layers: **defaults → `.ex_dna.exs` → CLI flags/API opts**.
+
+Create `.ex_dna.exs` in your project root for project-level defaults:
+
+```elixir
+%{
+  min_mass: 25,
+  ignore: ["lib/my_app_web/templates/**"],
+  excluded_macros: [:@, :schema, :pipe_through, :plug],
+  normalize_pipes: true
+}
+```
+
+All options can also be passed to `mix ex_dna` or to `ExDNA.analyze/1`:
 
 | Option | CLI flag | Default | Description |
 |--------|----------|---------|-------------|
@@ -72,6 +85,8 @@ All options can be passed to `mix ex_dna` or to `ExDNA.analyze/1`:
 | `min_similarity` | `--min-similarity` | 1.0 | Similarity threshold. Values < 1.0 enable Type-III near-miss detection |
 | `literal_mode` | `--literal-mode` | `keep` | `keep` = Type-I only, `abstract` = also Type-II |
 | `normalize_pipes` | `--normalize-pipes` | `false` | Treat `x \|> f()` the same as `f(x)` |
+| `excluded_macros` | `--exclude-macro` | `[:@]` | Macro names to skip (module attrs excluded by default) |
+| `parse_timeout` | — | `5000` | Max ms per file for parsing (kills hung files) |
 | `ignore` | `--ignore` | `[]` | Glob patterns to exclude |
 
 ## Refactoring suggestions
@@ -117,6 +132,7 @@ anti-unification breakdown.
 - [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
 - [x] Phase 2: Anti-unification + refactoring suggestions
 - [x] Phase 3: Type-III fuzzy matching + pipe normalization
+- [x] Hardening: parallel parsing, `.ex_dna.exs` config file, excluded macros, parse timeout
 - [ ] Phase 4: Macro suggestion engine + behaviour extraction
 - [ ] Phase 5: Compiler tracer integration + HTML reporter
 

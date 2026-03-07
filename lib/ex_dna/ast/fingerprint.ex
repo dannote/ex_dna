@@ -26,53 +26,63 @@ defmodule ExDNA.AST.Fingerprint do
   @spec fragments(Macro.t(), String.t(), pos_integer(), keyword()) :: [fragment()]
   def fragments(ast, file, min_mass, opts \\ []) do
     norm_opts = Keyword.take(opts, [:literal_mode, :normalize_pipes])
-    {_ast, frags} = walk(ast, file, min_mass, norm_opts, [])
+    excluded = Keyword.get(opts, :excluded_macros, []) |> MapSet.new()
+    {_ast, frags} = walk(ast, file, min_mass, norm_opts, excluded, [])
     frags
   end
 
-  defp walk({_form, meta, args} = node, file, min_mass, norm_opts, acc) when is_list(args) do
-    acc =
-      Enum.reduce(args, acc, fn child, a ->
-        elem(walk(child, file, min_mass, norm_opts, a), 1)
-      end)
-
-    mass = mass(node)
-
-    if mass >= min_mass do
-      normalized = Normalizer.normalize(node, norm_opts)
-      hash = compute_hash(normalized)
-      line = Keyword.get(meta, :line, 0)
-
-      frag = %{
-        hash: hash,
-        mass: mass,
-        ast: node,
-        file: file,
-        line: line
-      }
-
-      {node, [frag | acc]}
-    else
+  defp walk({form, _meta, args} = node, file, min_mass, norm_opts, excluded, acc)
+       when is_list(args) do
+    if excluded_macro?(form, excluded) do
       {node, acc}
+    else
+      acc =
+        Enum.reduce(args, acc, fn child, a ->
+          elem(walk(child, file, min_mass, norm_opts, excluded, a), 1)
+        end)
+
+      mass = mass(node)
+
+      if mass >= min_mass do
+        normalized = Normalizer.normalize(node, norm_opts)
+        hash = compute_hash(normalized)
+        {_form, meta, _args} = node
+        line = Keyword.get(meta, :line, 0)
+
+        frag = %{
+          hash: hash,
+          mass: mass,
+          ast: node,
+          file: file,
+          line: line
+        }
+
+        {node, [frag | acc]}
+      else
+        {node, acc}
+      end
     end
   end
 
-  defp walk({left, right}, file, min_mass, norm_opts, acc) do
-    {_, acc} = walk(left, file, min_mass, norm_opts, acc)
-    {_, acc} = walk(right, file, min_mass, norm_opts, acc)
+  defp walk({left, right}, file, min_mass, norm_opts, excluded, acc) do
+    {_, acc} = walk(left, file, min_mass, norm_opts, excluded, acc)
+    {_, acc} = walk(right, file, min_mass, norm_opts, excluded, acc)
     {{left, right}, acc}
   end
 
-  defp walk(list, file, min_mass, norm_opts, acc) when is_list(list) do
+  defp walk(list, file, min_mass, norm_opts, excluded, acc) when is_list(list) do
     acc =
       Enum.reduce(list, acc, fn item, a ->
-        elem(walk(item, file, min_mass, norm_opts, a), 1)
+        elem(walk(item, file, min_mass, norm_opts, excluded, a), 1)
       end)
 
     {list, acc}
   end
 
-  defp walk(leaf, _file, _min_mass, _norm_opts, acc), do: {leaf, acc}
+  defp walk(leaf, _file, _min_mass, _norm_opts, _excluded, acc), do: {leaf, acc}
+
+  defp excluded_macro?(form, excluded) when is_atom(form), do: MapSet.member?(excluded, form)
+  defp excluded_macro?(_, _), do: false
 
   @doc """
   Count the number of AST nodes in a tree (its "mass").
