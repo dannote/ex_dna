@@ -1,0 +1,96 @@
+defmodule ExDNA.Detection.Pipeline do
+  @moduledoc false
+
+  alias ExDNA.AST.{Annotator, Fingerprint}
+  alias ExDNA.Config
+  alias ExDNA.Detection.Clone
+  alias ExDNA.Refactor.Suggestion
+
+  @spec collect_files(Config.t()) :: [String.t()]
+  def collect_files(%Config{paths: paths, ignore: ignore_patterns}) do
+    paths
+    |> Enum.flat_map(&expand_path/1)
+    |> Enum.reject(fn file -> ignored?(file, ignore_patterns) end)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  @spec parse_and_fingerprint(String.t(), Config.t()) :: [Fingerprint.fragment()]
+  def parse_and_fingerprint(file, config) do
+    with {:ok, source} <- File.read(file),
+         {:ok, ast} <- parse_with_timeout(source, file, config.parse_timeout) do
+      ast = Annotator.strip_no_clone(ast)
+
+      Fingerprint.fragments(ast, file, config.min_mass,
+        literal_mode: config.literal_mode,
+        normalize_pipes: config.normalize_pipes,
+        excluded_macros: config.excluded_macros
+      )
+    else
+      _ -> []
+    end
+  end
+
+  @spec find_clones([Fingerprint.fragment()], Clone.clone_type()) :: [Clone.t()]
+  def find_clones(fragments, type) do
+    fragments
+    |> Enum.group_by(& &1.hash)
+    |> Enum.filter(fn {_hash, group} -> length(group) >= 2 end)
+    |> Enum.map(fn {_hash, group} -> Clone.from_fragments(group, type) end)
+  end
+
+  @spec attach_suggestion(Clone.t()) :: Clone.t()
+  def attach_suggestion(clone) do
+    case Suggestion.suggest(clone) do
+      nil -> clone
+      suggestion -> %{clone | suggestion: suggestion}
+    end
+  end
+
+  defp expand_path(path) do
+    cond do
+      File.dir?(path) ->
+        Path.wildcard(Path.join(path, "**/*.{ex,exs}"))
+
+      String.contains?(path, "*") ->
+        Path.wildcard(path)
+
+      File.regular?(path) ->
+        [path]
+
+      true ->
+        []
+    end
+  end
+
+  defp ignored?(file, patterns) do
+    Enum.any?(patterns, fn pattern ->
+      file
+      |> Path.relative_to_cwd()
+      |> matches_glob?(pattern)
+    end)
+  end
+
+  defp matches_glob?(path, pattern) do
+    regex =
+      pattern
+      |> Regex.escape()
+      |> String.replace("\\*\\*", ".*")
+      |> String.replace("\\*", "[^/]*")
+      |> then(&Regex.compile!("^#{&1}$"))
+
+    Regex.match?(regex, path)
+  end
+
+  defp parse_with_timeout(source, file, timeout) do
+    task =
+      Task.async(fn ->
+        Code.string_to_quoted(source, line: 1, columns: true, file: file)
+      end)
+
+    case Task.yield(task, timeout) || Task.shutdown(task) do
+      {:ok, {:ok, ast}} -> {:ok, ast}
+      _ -> :error
+    end
+  end
+end

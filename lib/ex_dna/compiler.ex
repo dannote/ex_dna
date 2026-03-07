@@ -19,10 +19,8 @@ defmodule ExDNA.Compiler do
 
   use Mix.Task.Compiler
 
-  alias ExDNA.AST.{Annotator, Fingerprint}
   alias ExDNA.{Cache, Config}
-  alias ExDNA.Detection.{Clone, Filter}
-  alias ExDNA.Refactor.Suggestion
+  alias ExDNA.Detection.{Filter, Pipeline}
 
   @impl true
   def run(_argv) do
@@ -30,13 +28,13 @@ defmodule ExDNA.Compiler do
     cache_path = Cache.default_path()
     cached = Cache.read(cache_path)
 
-    files = collect_files(config)
+    files = Pipeline.collect_files(config)
     stale = Cache.stale_files(files, cached)
 
     fresh_entries =
       stale
       |> Task.async_stream(
-        fn file -> {file, parse_and_fingerprint(file, config)} end,
+        fn file -> {file, Pipeline.parse_and_fingerprint(file, config)} end,
         max_concurrency: System.schedulers_online(),
         ordered: false
       )
@@ -49,9 +47,9 @@ defmodule ExDNA.Compiler do
 
     clones =
       fragments
-      |> find_clones(:type_i)
+      |> Pipeline.find_clones(:type_i)
       |> Filter.prune_nested()
-      |> Enum.map(&attach_suggestion/1)
+      |> Enum.map(&Pipeline.attach_suggestion/1)
       |> Enum.sort_by(& &1.mass, :desc)
 
     diagnostics =
@@ -68,73 +66,5 @@ defmodule ExDNA.Compiler do
       end)
 
     {:ok, diagnostics}
-  end
-
-  defp collect_files(%Config{paths: paths, ignore: ignore_patterns}) do
-    paths
-    |> Enum.flat_map(&expand_path/1)
-    |> Enum.reject(fn file -> ignored?(file, ignore_patterns) end)
-    |> Enum.uniq()
-    |> Enum.sort()
-  end
-
-  defp expand_path(path) do
-    cond do
-      File.dir?(path) -> Path.wildcard(Path.join(path, "**/*.{ex,exs}"))
-      String.contains?(path, "*") -> Path.wildcard(path)
-      File.regular?(path) -> [path]
-      true -> []
-    end
-  end
-
-  defp ignored?(file, patterns) do
-    rel = Path.relative_to_cwd(file)
-
-    Enum.any?(patterns, fn pattern ->
-      regex =
-        pattern
-        |> Regex.escape()
-        |> String.replace("\\*\\*", ".*")
-        |> String.replace("\\*", "[^/]*")
-        |> then(&Regex.compile!("^#{&1}$"))
-
-      Regex.match?(regex, rel)
-    end)
-  end
-
-  defp parse_and_fingerprint(file, config) do
-    case File.read(file) do
-      {:ok, source} ->
-        case Code.string_to_quoted(source, line: 1, columns: true, file: file) do
-          {:ok, ast} ->
-            ast = Annotator.strip_no_clone(ast)
-
-            Fingerprint.fragments(ast, file, config.min_mass,
-              literal_mode: config.literal_mode,
-              normalize_pipes: config.normalize_pipes,
-              excluded_macros: config.excluded_macros
-            )
-
-          {:error, _} ->
-            []
-        end
-
-      {:error, _} ->
-        []
-    end
-  end
-
-  defp find_clones(fragments, type) do
-    fragments
-    |> Enum.group_by(& &1.hash)
-    |> Enum.filter(fn {_hash, group} -> length(group) >= 2 end)
-    |> Enum.map(fn {_hash, group} -> Clone.from_fragments(group, type) end)
-  end
-
-  defp attach_suggestion(clone) do
-    case Suggestion.suggest(clone) do
-      nil -> clone
-      suggestion -> %{clone | suggestion: suggestion}
-    end
   end
 end

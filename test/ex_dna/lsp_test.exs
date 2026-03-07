@@ -48,16 +48,20 @@ defmodule ExDNA.LSPTest do
       params: %{capabilities: %{}, rootUri: root_uri}
     })
 
-    assert_result(1, %{
-      "capabilities" => %{
-        "textDocumentSync" => %{
-          "openClose" => true,
-          "save" => %{"includeText" => false},
-          "change" => 1
-        }
+    assert_result(
+      1,
+      %{
+        "capabilities" => %{
+          "textDocumentSync" => %{
+            "openClose" => true,
+            "save" => %{"includeText" => false},
+            "change" => 1
+          }
+        },
+        "serverInfo" => %{"name" => "ExDNA", "version" => "0.1.0"}
       },
-      "serverInfo" => %{"name" => "ExDNA", "version" => "0.1.0"}
-    })
+      5_000
+    )
 
     shutdown_client!(client)
     shutdown_server!(server)
@@ -76,7 +80,7 @@ defmodule ExDNA.LSPTest do
       params: %{capabilities: %{}, rootUri: root_uri}
     })
 
-    assert_result(1, _)
+    assert_result(1, _, 5_000)
 
     notify(client, %{method: "initialized", jsonrpc: "2.0", params: %{}})
 
