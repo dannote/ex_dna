@@ -25,6 +25,8 @@ macro, or a behaviour callback.
 - **Incremental `Mix.Task.Compiler`** — only re-analyzes changed files
 - **LSP server** — pushes clone diagnostics to your editor alongside
   [Expert](https://github.com/elixir-lang/expert) or ElixirLS
+- **Credo integration** — drop-in replacement for `DuplicatedCode`, reuses
+  Credo's parsed ASTs
 - **CI-ready** — exits with code 1 when clones are found
 - **Three output formats** — Credo-style console, JSON, self-contained HTML
 - **Fast** — parallel file parsing, 395 files in ~1 second
@@ -130,6 +132,36 @@ vim.lsp.config('ex_dna', {
   root_markers = { 'mix.exs' },
   filetypes = { 'elixir' },
 })
+```
+
+## Credo integration
+
+ExDNA ships a Credo check that replaces the built-in `DuplicatedCode` with
+full Type-I/II/III detection and refactoring suggestions. It reuses Credo's
+already-parsed ASTs — no double parsing.
+
+Add to the `:enabled` list in `.credo.exs`:
+
+```elixir
+{ExDNA.Credo, []}
+```
+
+And disable the built-in check:
+
+```elixir
+{Credo.Check.Design.DuplicatedCode, false}
+```
+
+All ExDNA options are available as check params:
+
+```elixir
+{ExDNA.Credo, [
+  min_mass: 40,
+  literal_mode: :abstract,
+  excluded_macros: [:@, :schema, :pipe_through],
+  normalize_pipes: true,
+  min_similarity: 0.85
+]}
 ```
 
 ## How it works

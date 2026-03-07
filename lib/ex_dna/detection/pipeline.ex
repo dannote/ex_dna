@@ -19,16 +19,27 @@ defmodule ExDNA.Detection.Pipeline do
   def parse_and_fingerprint(file, config) do
     with {:ok, source} <- File.read(file),
          {:ok, ast} <- parse_with_timeout(source, file, config.parse_timeout) do
-      ast = Annotator.strip_no_clone(ast)
-
-      Fingerprint.fragments(ast, file, config.min_mass,
-        literal_mode: config.literal_mode,
-        normalize_pipes: config.normalize_pipes,
-        excluded_macros: config.excluded_macros
-      )
+      fingerprint_ast(ast, file, config)
     else
       _ -> []
     end
+  end
+
+  @doc """
+  Fingerprint a pre-parsed AST for the given file path.
+
+  Use this when the AST is already available (e.g. from Credo's ETS cache)
+  to avoid re-reading and re-parsing from disk.
+  """
+  @spec fingerprint_ast(Macro.t(), String.t(), Config.t()) :: [Fingerprint.fragment()]
+  def fingerprint_ast(ast, file, config) do
+    ast = Annotator.strip_no_clone(ast)
+
+    Fingerprint.fragments(ast, file, config.min_mass,
+      literal_mode: config.literal_mode,
+      normalize_pipes: config.normalize_pipes,
+      excluded_macros: config.excluded_macros
+    )
   end
 
   @spec find_clones([Fingerprint.fragment()], Clone.clone_type()) :: [Clone.t()]
@@ -82,7 +93,10 @@ defmodule ExDNA.Detection.Pipeline do
     Regex.match?(regex, path)
   end
 
-  defp parse_with_timeout(source, file, timeout) do
+  @doc false
+  @spec parse_with_timeout(String.t(), String.t(), pos_integer()) ::
+          {:ok, Macro.t()} | :error
+  def parse_with_timeout(source, file, timeout) do
     task =
       Task.async(fn ->
         Code.string_to_quoted(source, line: 1, columns: true, file: file)

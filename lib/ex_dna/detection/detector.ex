@@ -19,14 +19,35 @@ defmodule ExDNA.Detection.Detector do
   @spec run(Config.t()) :: [Clone.t()]
   def run(%Config{} = config) do
     files = Pipeline.collect_files(config)
-    fragments = parse_parallel(files, config)
+
+    pairs =
+      files
+      |> Task.async_stream(
+        fn file -> parse_file(file, config) end,
+        max_concurrency: System.schedulers_online(),
+        ordered: false
+      )
+      |> Enum.flat_map(fn {:ok, result} -> result end)
+
+    run(config, pairs)
+  end
+
+  @doc """
+  Run detection on pre-parsed ASTs.
+
+  Accepts a list of `{filename, ast}` tuples (e.g. from Credo's ETS cache)
+  and skips file I/O and parsing entirely.
+  """
+  @spec run(Config.t(), [{String.t(), Macro.t()}]) :: [Clone.t()]
+  def run(%Config{} = config, file_ast_pairs) when is_list(file_ast_pairs) do
+    fragments = fingerprint_pairs(file_ast_pairs, config)
 
     type_i_clones = Pipeline.find_clones(fragments, :type_i)
 
     type_ii_clones =
       if config.min_similarity < 1.0 or config.literal_mode == :abstract do
         abstract_config = %{config | literal_mode: :abstract}
-        fragments_ii = parse_parallel(files, abstract_config)
+        fragments_ii = fingerprint_pairs(file_ast_pairs, abstract_config)
 
         Pipeline.find_clones(fragments_ii, :type_ii)
         |> reject_already_found(type_i_clones)
@@ -46,10 +67,19 @@ defmodule ExDNA.Detection.Detector do
     |> Enum.sort_by(& &1.mass, :desc)
   end
 
-  defp parse_parallel(files, config) do
-    files
+  defp parse_file(file, config) do
+    with {:ok, source} <- File.read(file),
+         {:ok, ast} <- Pipeline.parse_with_timeout(source, file, config.parse_timeout) do
+      [{file, ast}]
+    else
+      _ -> []
+    end
+  end
+
+  defp fingerprint_pairs(pairs, config) do
+    pairs
     |> Task.async_stream(
-      fn file -> Pipeline.parse_and_fingerprint(file, config) end,
+      fn {file, ast} -> Pipeline.fingerprint_ast(ast, file, config) end,
       max_concurrency: System.schedulers_online(),
       ordered: false
     )
