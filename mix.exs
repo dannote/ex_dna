@@ -30,6 +30,7 @@ defmodule ExDNA.MixProject do
   defp deps do
     [
       {:jason, "~> 1.0"},
+      {:gen_lsp, "~> 0.11"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}

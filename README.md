@@ -139,6 +139,27 @@ end
 
 Results are cached in `.ex_dna_cache` — only changed files are re-analyzed.
 
+## Editor integration (LSP)
+
+ExDNA ships an LSP server that pushes clone diagnostics to your editor.
+It runs alongside your primary Elixir LSP (Expert, ElixirLS).
+
+```bash
+$ mix ex_dna.lsp
+```
+
+### Neovim
+
+```lua
+vim.lsp.config('ex_dna', {
+  cmd = { 'mix', 'ex_dna.lsp' },
+  root_markers = { 'mix.exs' },
+  filetypes = { 'elixir' },
+})
+```
+
+Re-analyzes on every file save and pushes warnings inline.
+
 ## Roadmap
 
 - [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
@@ -159,7 +180,7 @@ Results are cached in `.ex_dna_cache` — only changed files are re-analyzed.
   only re-analyzes changed files
 - [x] `@no_clone` annotation — add `@no_clone true` before a `def` to
   suppress it from detection
-- [ ] LSP server via GenLSP — push clone diagnostics to editors alongside
+- [x] LSP server via GenLSP — push clone diagnostics to editors alongside
   [Expert](https://expert-lsp.org/) (Elixir's official LSP)
 
 ## License
