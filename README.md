@@ -97,31 +97,20 @@ it identifies what's common and what differs, then suggests an extracted
 function with the differences as parameters:
 
 ```
-Clone #3 [exact, 19 nodes]
-
-  admin_service.ex:7
-    params
-    |> Map.put(:inserted_at, DateTime.utc_now())
-    |> validate_required([:name, :email])
-    |> validate_format(:email, ~r/@/)
-
-  user_service.ex:7
-    attrs
-    |> Map.put(:inserted_at, DateTime.utc_now())
-    |> validate_required([:name, :email])
-    |> validate_format(:email, ~r/@/)
-
-  💡 Suggestion: extract function
-
-    defp extracted_function(arg0) do
-      arg0
-      |> Map.put(:inserted_at, DateTime.utc_now())
-      |> validate_required([:name, :email])
-      |> validate_format(:email, ~r/@/)
-    end
-
-    admin_service.ex:7 → extracted_function(params)
-    user_service.ex:7  → extracted_function(attrs)
+┃
+┃ [I]  #3  19 nodes
+┃   admin_service.ex:7
+┃   user_service.ex:7
+┃
+┃     params
+┃     |> Map.put(:inserted_at, DateTime.utc_now())
+┃     |> validate_required([:name, :email])
+┃     |> validate_format(:email, ~r/@/)
+┃
+┃   → Extract: defp extracted_function(arg0)
+┃     admin_service.ex:7 → extracted_function(params)
+┃     user_service.ex:7  → extracted_function(attrs)
+┃
 ```
 
 Use `mix ex_dna.explain N` to deep-dive into a specific clone with the full
@@ -132,9 +121,24 @@ anti-unification breakdown.
 - [x] Phase 1: AST normalization + fingerprinting + Type-I/II detection
 - [x] Phase 2: Anti-unification + refactoring suggestions
 - [x] Phase 3: Type-III fuzzy matching + pipe normalization
-- [x] Hardening: parallel parsing, `.ex_dna.exs` config file, excluded macros, parse timeout
-- [ ] Phase 4: Macro suggestion engine + behaviour extraction
-- [ ] Phase 5: Compiler tracer integration + HTML reporter
+- [x] Hardening: parallel parsing, `.ex_dna.exs` config, excluded macros, parse timeout
+- [x] Output: Credo-style console reporter, proper JSON reporter
+- [x] Validation: 0 false positives across real-world projects (100–400 files each)
+- [ ] LSP server via GenLSP — push clone diagnostics to editors alongside
+  [Expert](https://expert-lsp.org/) (Elixir's official LSP). Editors like
+  Neovim/VS Code run both servers per filetype.
+- [ ] Smarter suggestion names — derive from the AST (dominant call site,
+  shared struct name) instead of generic `extracted_function`
+- [ ] Cross-file clone grouping — "actions/* and tools/* share 5 duplicated
+  functions" instead of listing each pair separately
+- [ ] Macro suggestion engine — detect repeated boilerplate (e.g., identical
+  `schema` blocks across modules) and suggest `defmacro`
+- [ ] Behaviour extraction — when multiple modules implement the same function
+  shape, suggest `@callback` / behaviour
+- [ ] `Mix.Task.Compiler` tracer — incremental detection, only re-analyze
+  changed files
+- [ ] `@no_clone` annotation — suppress known/intentional duplicates
+- [ ] HTML reporter with syntax-highlighted diffs
 
 ## License
 
