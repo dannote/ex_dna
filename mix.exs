@@ -63,7 +63,8 @@ defmodule ExDNA.MixProject do
         "format --check-formatted",
         "credo --strict",
         "dialyzer",
-        "test"
+        "test",
+        "ex_dna"
       ]
     ]
   end
