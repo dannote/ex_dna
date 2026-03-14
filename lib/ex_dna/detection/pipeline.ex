@@ -1,7 +1,7 @@
 defmodule ExDNA.Detection.Pipeline do
   @moduledoc false
 
-  alias ExDNA.AST.{Annotator, Fingerprint}
+  alias ExDNA.AST.{Annotator, ClauseGrouper, Fingerprint}
   alias ExDNA.Config
   alias ExDNA.Detection.Clone
   alias ExDNA.Refactor.Suggestion
@@ -33,7 +33,10 @@ defmodule ExDNA.Detection.Pipeline do
   """
   @spec fingerprint_ast(Macro.t(), String.t(), Config.t()) :: [Fingerprint.fragment()]
   def fingerprint_ast(ast, file, config) do
-    ast = Annotator.strip_no_clone(ast)
+    ast =
+      ast
+      |> Annotator.strip_no_clone()
+      |> ClauseGrouper.group()
 
     Fingerprint.fragments(ast, file, config.min_mass,
       literal_mode: config.literal_mode,

@@ -114,6 +114,39 @@ defmodule ExDNA.Refactor.SuggestionTest do
       assert suggestion.name == "shared_process"
     end
 
+    test "names grouped multi-clause function with guard" do
+      clause_a =
+        quote do
+          defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
+        end
+
+      clause_b =
+        quote do
+          defp format_bytes(bytes) when bytes < 1_048_576, do: "#{bytes} KB"
+        end
+
+      clause_c =
+        quote do
+          defp format_bytes(bytes), do: "#{bytes} MB"
+        end
+
+      grouped_ast = {:__ex_dna_grouped_def__, [], [clause_a, clause_b, clause_c]}
+
+      clone = %Clone{
+        type: :type_i,
+        hash: "x",
+        mass: 50,
+        fragments: [
+          %{file: "a.ex", line: 1, ast: grouped_ast, mass: 50},
+          %{file: "b.ex", line: 1, ast: grouped_ast, mass: 50}
+        ]
+      }
+
+      suggestion = Suggestion.suggest(clone)
+      assert suggestion.name == "shared_format_bytes"
+      refute String.contains?(suggestion.body, "__ex_dna_grouped_def__")
+    end
+
     test "names extracted function based on original defp" do
       ast =
         quote do

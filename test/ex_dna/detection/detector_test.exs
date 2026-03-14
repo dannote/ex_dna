@@ -340,5 +340,106 @@ defmodule ExDNA.Detection.DetectorTest do
       assert length(fuzzy_clones) >= length(exact_only)
       assert type_iii != []
     end
+
+    test "detects duplicated multi-clause functions across files", %{dir: dir} do
+      write_fixture(dir, "cache.ex", """
+      defmodule Cache do
+        defp format_bytes(bytes) when bytes < 1024, do: "\#{bytes} B"
+        defp format_bytes(bytes) when bytes < 1_048_576, do: "\#{Float.round(bytes / 1024, 1)} KB"
+        defp format_bytes(bytes), do: "\#{Float.round(bytes / 1_048_576, 1)} MB"
+      end
+      """)
+
+      write_fixture(dir, "size.ex", """
+      defmodule Size do
+        defp format_bytes(bytes) when bytes < 1024, do: "\#{bytes} B"
+        defp format_bytes(bytes) when bytes < 1_048_576, do: "\#{Float.round(bytes / 1024, 1)} KB"
+        defp format_bytes(bytes), do: "\#{Float.round(bytes / 1_048_576, 1)} MB"
+      end
+      """)
+
+      config = Config.new(paths: [dir], min_mass: 30, reporters: [])
+      clones = Detector.run(config)
+
+      format_clones =
+        Enum.filter(clones, fn c ->
+          Enum.any?(c.source_snippets, &String.contains?(&1, "format_bytes"))
+        end)
+
+      assert length(format_clones) == 1
+      clone = hd(format_clones)
+      assert clone.mass >= 30
+      assert length(clone.fragments) == 2
+
+      files = Enum.map(clone.fragments, & &1.file) |> Enum.sort()
+      assert Enum.any?(files, &String.ends_with?(&1, "cache.ex"))
+      assert Enum.any?(files, &String.ends_with?(&1, "size.ex"))
+
+      snippet = hd(clone.source_snippets)
+      refute String.contains?(snippet, "__ex_dna_grouped_def__")
+      assert String.contains?(snippet, "format_bytes")
+    end
+
+    test "detects multi-clause duplicates with renamed variables", %{dir: dir} do
+      write_fixture(dir, "a.ex", """
+      defmodule A do
+        defp convert(val) when val < 100, do: val
+        defp convert(val) when val < 10000, do: val / 100
+        defp convert(val), do: val / 10000
+      end
+      """)
+
+      write_fixture(dir, "b.ex", """
+      defmodule B do
+        defp convert(amount) when amount < 100, do: amount
+        defp convert(amount) when amount < 10000, do: amount / 100
+        defp convert(amount), do: amount / 10000
+      end
+      """)
+
+      config = Config.new(paths: [dir], min_mass: 5, reporters: [])
+      clones = Detector.run(config)
+
+      convert_clones =
+        Enum.filter(clones, fn c ->
+          Enum.any?(c.source_snippets, &String.contains?(&1, "convert"))
+        end)
+
+      grouped_clone =
+        Enum.find(convert_clones, fn c -> c.mass > 20 end)
+
+      assert grouped_clone != nil
+      assert length(grouped_clone.fragments) == 2
+    end
+
+    test "does not group non-consecutive clauses as a single clone", %{dir: dir} do
+      write_fixture(dir, "split_a.ex", """
+      defmodule SplitA do
+        defp foo(:a), do: 1
+        defp bar(x), do: x * 2
+        defp foo(:b), do: 2
+      end
+      """)
+
+      write_fixture(dir, "split_b.ex", """
+      defmodule SplitB do
+        defp foo(:a), do: 1
+        defp bar(x), do: x * 2
+        defp foo(:b), do: 2
+      end
+      """)
+
+      config = Config.new(paths: [dir], min_mass: 5, reporters: [])
+      clones = Detector.run(config)
+
+      grouped_clones =
+        Enum.filter(clones, fn c ->
+          Enum.any?(c.fragments, fn f ->
+            match?({:__ex_dna_grouped_def__, _, _}, f.ast)
+          end)
+        end)
+
+      assert grouped_clones == []
+    end
   end
 end

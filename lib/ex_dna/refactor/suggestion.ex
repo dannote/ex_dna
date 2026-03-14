@@ -118,7 +118,18 @@ defmodule ExDNA.Refactor.Suggestion do
     name_from_ast(ast)
   end
 
-  # 1. def / defp wrapper → shared_<name>
+  # 0. Grouped multi-clause def → delegate to the first clause
+  defp name_from_ast({:__ex_dna_grouped_def__, _, [first | _]}) do
+    name_from_ast(first)
+  end
+
+  # 1a. def / defp with guard clause → shared_<name>
+  defp name_from_ast({def_kind, _, [{:when, _, [{name, _, _} | _]} | _]})
+       when def_kind in [:def, :defp] and is_atom(name) do
+    "shared_#{name}"
+  end
+
+  # 1b. def / defp wrapper → shared_<name>
   defp name_from_ast({def_kind, _, [{name, _, _} | _]})
        when def_kind in [:def, :defp] and is_atom(name) do
     "shared_#{name}"
@@ -272,6 +283,8 @@ defmodule ExDNA.Refactor.Suggestion do
   end
 
   defp humanize_ast(ast) do
+    ast = unwrap_grouped_def(ast)
+
     Macro.prewalk(ast, fn
       {name, meta, ctx} when is_atom(name) and is_atom(ctx) ->
         str = Atom.to_string(name)
@@ -305,6 +318,13 @@ defmodule ExDNA.Refactor.Suggestion do
 
       other ->
         other
+    end)
+  end
+
+  defp unwrap_grouped_def(ast) do
+    Macro.prewalk(ast, fn
+      {:__ex_dna_grouped_def__, _meta, clauses} -> {:__block__, [], clauses}
+      node -> node
     end)
   end
 end
