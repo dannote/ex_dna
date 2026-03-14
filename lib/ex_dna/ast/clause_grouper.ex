@@ -78,7 +78,9 @@ defmodule ExDNA.AST.ClauseGrouper do
 
   defp def_identity(_), do: nil
 
-  defp name_arity({name, _meta, args}) when is_atom(name) and is_list(args), do: {name, length(args)}
+  defp name_arity({name, _meta, args}) when is_atom(name) and is_list(args),
+    do: {name, length(args)}
+
   defp name_arity({name, _meta, nil}) when is_atom(name), do: {name, 0}
   defp name_arity(_), do: nil
 

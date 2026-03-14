@@ -13,6 +13,9 @@ macro, or a behaviour callback.
 
 - **Three clone types** — exact copies (I), renamed variables / changed
   literals (II), and near-miss clones via tree edit distance (III)
+- **Multi-clause awareness** — consecutive `def`/`defp` clauses with the same
+  name/arity are analyzed as a single unit, catching duplicated pattern-matching
+  functions that individual clauses are too small to flag
 - **Refactoring suggestions** — extract function, extract macro, extract
   behaviour with `@callback`
 - **Smart naming** — suggestions are named after the dominant struct, call,
@@ -35,7 +38,7 @@ macro, or a behaviour callback.
 
 ```elixir
 def deps do
-  [{:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false}]
+  [{:ex_dna, "~> 1.2", only: [:dev, :test], runtime: false}]
 end
 ```
 
