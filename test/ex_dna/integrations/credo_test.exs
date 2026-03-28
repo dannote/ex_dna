@@ -212,6 +212,6 @@ defmodule ExDNA.CredoTest do
       |> run_check(Check, min_mass: 30, literal_mode: :abstract)
 
     refute Enum.any?(issues, &(&1.line_no == 0))
-    refute Enum.any?(issues, &(String.contains?(&1.message, "also in .")))
+    refute Enum.any?(issues, &String.contains?(&1.message, "also in ."))
   end
 end

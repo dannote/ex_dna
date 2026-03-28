@@ -412,6 +412,57 @@ defmodule ExDNA.Detection.DetectorTest do
       assert length(grouped_clone.fragments) == 2
     end
 
+    test "does not report line-0 __block__ clones for modules with same-named functions", %{
+      dir: dir
+    } do
+      write_fixture(dir, "a.ex", """
+      defmodule A do
+        def process(x) do
+          x
+          |> Enum.map(fn item -> item.name end)
+          |> Enum.filter(fn item -> item != nil end)
+          |> Enum.sort()
+        end
+
+        def transform(y) do
+          y
+          |> Enum.map(fn item -> item.age end)
+          |> Enum.filter(fn item -> item > 0 end)
+          |> Enum.sort()
+        end
+      end
+      """)
+
+      write_fixture(dir, "b.ex", """
+      defmodule B do
+        def process(a) do
+          a
+          |> Enum.map(fn item -> item.name end)
+          |> Enum.filter(fn item -> item != nil end)
+          |> Enum.sort()
+        end
+
+        def transform(b) do
+          b
+          |> Enum.map(fn item -> item.age end)
+          |> Enum.filter(fn item -> item > 0 end)
+          |> Enum.sort()
+        end
+      end
+      """)
+
+      config = Config.new(paths: [dir], min_mass: 5, reporters: [])
+      clones = Detector.run(config)
+
+      line0_clones =
+        Enum.filter(clones, fn c ->
+          Enum.any?(c.fragments, fn f -> f.line == 0 end)
+        end)
+
+      assert line0_clones == []
+      assert clones != []
+    end
+
     test "does not group non-consecutive clauses as a single clone", %{dir: dir} do
       write_fixture(dir, "split_a.ex", """
       defmodule SplitA do

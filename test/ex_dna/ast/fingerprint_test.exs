@@ -93,6 +93,28 @@ defmodule ExDNA.AST.FingerprintTest do
 
       assert has_process
     end
+
+    test "does not fingerprint bare __block__ nodes" do
+      ast =
+        quote do
+          defmodule Foo do
+            def process(x) do
+              x |> Enum.map(fn i -> i.name end) |> Enum.reject(&is_nil/1)
+            end
+
+            def transform(y) do
+              y |> Enum.map(fn i -> i.age end) |> Enum.filter(fn i -> i > 0 end)
+            end
+          end
+        end
+
+      frags = Fingerprint.fragments(ast, "test.ex", 3)
+
+      block_frags =
+        Enum.filter(frags, fn f -> match?({:__block__, _, _}, f.ast) end)
+
+      assert block_frags == []
+    end
   end
 
   describe "mass/1" do

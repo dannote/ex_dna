@@ -31,6 +31,16 @@ defmodule ExDNA.AST.Fingerprint do
     frags
   end
 
+  defp walk({:__block__, _meta, args} = node, file, min_mass, norm_opts, excluded, acc)
+       when is_list(args) do
+    acc =
+      Enum.reduce(args, acc, fn child, a ->
+        elem(walk(child, file, min_mass, norm_opts, excluded, a), 1)
+      end)
+
+    {node, acc}
+  end
+
   defp walk({form, _meta, args} = node, file, min_mass, norm_opts, excluded, acc)
        when is_list(args) do
     if excluded_macro?(form, excluded) do

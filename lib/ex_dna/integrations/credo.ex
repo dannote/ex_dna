@@ -112,6 +112,7 @@ if Code.ensure_loaded?(Credo.Check) do
         ExecutionIssues.append(exec, source_file, issue)
       end
     end
+
     defp other_locations(fragments, current) do
       fragments
       |> Enum.reject(&same_location?(&1, current))
