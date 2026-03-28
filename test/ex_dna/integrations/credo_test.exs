@@ -155,4 +155,63 @@ defmodule ExDNA.CredoTest do
 
     assert Enum.all?(issues, &(&1.message =~ "exact" or &1.message =~ "renamed"))
   end
+
+  test "does not emit self-match issues when all fragments resolve to the same location" do
+    duplicate = """
+    defmodule SameFile do
+      def foo(data) do
+        data
+        |> Enum.map(fn x -> x * 2 end)
+        |> Enum.filter(fn x -> x > 10 end)
+        |> Enum.sort()
+        |> Enum.take(5)
+      end
+
+      def bar(data) do
+        data
+        |> Enum.map(fn x -> x * 2 end)
+        |> Enum.filter(fn x -> x > 10 end)
+        |> Enum.sort()
+        |> Enum.take(5)
+      end
+    end
+    """
+
+    issues =
+      [to_source_file(duplicate, "same_file.ex")]
+      |> run_check(Check, min_mass: 5)
+
+    refute Enum.any?(issues, fn issue ->
+             issue.line_no == 0 and String.contains?(issue.message, "also in .")
+           end)
+  end
+
+  test "does not emit line 0 issues for reduced reports from issue #1" do
+    reduced = """
+    defmodule Example.A do
+      defp organization_tone(:government), do: "purple"
+      defp organization_tone(:business), do: "blue"
+      defp organization_tone(:individual), do: "green"
+      defp organization_tone(:non_profit), do: "orange"
+      defp organization_tone(:event), do: "pink"
+      defp organization_tone(:chamber), do: "indigo"
+    end
+
+    defmodule Example.B do
+      defp encode_csv_row(fields) do
+        fields
+        |> Enum.map_join(",", &escape_csv_field/1)
+      end
+
+      defp escape_csv_field(value), do: to_string(value)
+    end
+    """
+
+    issues =
+      [to_source_file(reduced, "issue_1_reduced.ex")]
+      |> run_check(Check, min_mass: 30, literal_mode: :abstract)
+
+    refute Enum.any?(issues, &(&1.line_no == 0))
+    refute Enum.any?(issues, &(String.contains?(&1.message, "also in .")))
+  end
 end

@@ -96,17 +96,14 @@ if Code.ensure_loaded?(Credo.Check) do
     defp append_issues(clone, exec, source_file_index, params) do
       for {frag, _snippet} <- Enum.zip(clone.fragments, clone.source_snippets),
           source_file = source_file_index[frag.file],
-          source_file != nil do
+          source_file != nil,
+          others = other_locations(clone.fragments, frag),
+          others != [] do
         issue_meta = IssueMeta.for(source_file, params)
-
-        others =
-          clone.fragments
-          |> Enum.reject(&(&1.file == frag.file and &1.line == frag.line))
-          |> Enum.map_join(", ", fn f -> "#{f.file}:#{f.line}" end)
 
         issue =
           format_issue(issue_meta,
-            message: build_message(clone, others),
+            message: build_message(clone, format_locations(others)),
             line_no: frag.line,
             trigger: Issue.no_trigger(),
             severity: Severity.compute(length(clone.fragments), 1)
@@ -114,6 +111,19 @@ if Code.ensure_loaded?(Credo.Check) do
 
         ExecutionIssues.append(exec, source_file, issue)
       end
+    end
+    defp other_locations(fragments, current) do
+      fragments
+      |> Enum.reject(&same_location?(&1, current))
+      |> Enum.uniq_by(&{&1.file, &1.line})
+    end
+
+    defp same_location?(left, right) do
+      left.file == right.file and left.line == right.line
+    end
+
+    defp format_locations(fragments) do
+      Enum.map_join(fragments, ", ", fn f -> "#{f.file}:#{f.line}" end)
     end
 
     defp build_config(params) do
