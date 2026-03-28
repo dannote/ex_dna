@@ -1,7 +1,7 @@
 defmodule ExDNA.MixProject do
   use Mix.Project
 
-  @version "1.2.0"
+  @version "1.2.1"
   @source_url "https://github.com/dannote/ex_dna"
 
   def project do

@@ -38,7 +38,7 @@ macro, or a behaviour callback.
 
 ```elixir
 def deps do
-  [{:ex_dna, "~> 1.2", only: [:dev, :test], runtime: false}]
+  [{:ex_dna, "~> 1.2.1", only: [:dev, :test], runtime: false}]
 end
 ```
 
